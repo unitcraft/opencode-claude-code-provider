@@ -1,7 +1,7 @@
 // Does the installed OpenCode still match this provider's rules?  npm run check-opencode [-- <path to opencode.exe>]
 // Exit 0: yes. Exit 1: no -- see README, "When OpenCode is updated". The provider runs the same check by
 // itself once per OpenCode version; this script is for doing it by hand (e.g. right after `opencode upgrade`).
-import { checkOpenCodeFile, findOpenCode } from "../opencode-check.js"
+import { checkOpenCodeFile, findOpenCode } from "../src/opencode-check.js"
 
 const file = process.argv[2] || findOpenCode()
 if (!file) {

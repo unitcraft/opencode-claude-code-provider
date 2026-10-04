@@ -54,22 +54,45 @@ export function noteChannel() {
   }
 }
 
-/** SDK hooks that put compaction notes into `notes` (merged with the user's own hooks). */
-export function compactionHooks(notes, userHooks = {}, language = "en") {
+/**
+ * Claude Code's compaction in the window: the hook PreCompact shows the start, the SDK message
+ * `compact_boundary` the end with the numbers (pre/post tokens, duration; measured order: status compacting
+ * -> PreCompact -> PostCompact -> status done -> compact_boundary). A failed compaction (status with
+ * compact_result "failed") shows the error. If the boundary never comes, finish() shows a plain end line.
+ * Returns { hooks, onSdkMessage, finish } -- the user's own hooks and onSdkMessage keep working.
+ */
+export function compactionWatch(notes, { userHooks = {}, userOnSdkMessage, language = "en", onBoundary } = {}) {
   const t = texts(language)
   let started = 0
+  let pending = false
+  const seconds = (ms) => Math.max(1, Math.round(ms / 1000))
   const pre = async (input) => {
     started = Date.now()
+    pending = true
     notes.push(t.compactStarted(input?.trigger))
     return { continue: true }
   }
-  const post = async () => {
-    notes.push(t.compactEnded(Math.max(1, Math.round((Date.now() - (started || Date.now())) / 1000))))
-    return { continue: true }
+  const onSdkMessage = (m) => {
+    try {
+      if (m?.type === "system" && m.subtype === "compact_boundary") {
+        const meta = m.compact_metadata ?? {}
+        pending = false
+        onBoundary?.(meta)
+        notes.push(t.compactEnded(seconds(meta.duration_ms ?? Date.now() - (started || Date.now())), meta.pre_tokens, meta.post_tokens))
+      } else if (m?.type === "system" && m.subtype === "status" && m.compact_result === "failed") {
+        pending = false
+        notes.push(t.compactFailedNote(m.compact_error ?? "?"))
+      }
+    } finally {
+      userOnSdkMessage?.(m)
+    }
   }
   return {
-    ...userHooks,
-    PreCompact: [...(userHooks.PreCompact ?? []), { hooks: [pre] }],
-    PostCompact: [...(userHooks.PostCompact ?? []), { hooks: [post] }],
+    hooks: { ...userHooks, PreCompact: [...(userHooks.PreCompact ?? []), { hooks: [pre] }] },
+    onSdkMessage,
+    finish() {
+      if (pending) notes.push(t.compactEnded(seconds(Date.now() - started)))
+      pending = false
+    },
   }
 }

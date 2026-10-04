@@ -4,8 +4,8 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { test } from "node:test"
-import { autoCompactWindowFor, disabledTools } from "../lib.js"
-import { DEFAULTS, findProjectSettings, mergeSettings, settingsFor } from "../settings.js"
+import { autoCompactWindowFor, disabledTools } from "../src/lib.js"
+import { DEFAULTS, findProjectSettings, mergeSettings, settingsFor } from "../src/settings.js"
 
 test("defaults alone: English, thresholds per family, the useless tools off", () => {
   const s = settingsFor({}, undefined)

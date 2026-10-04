@@ -11,11 +11,11 @@
 
 Что сломалось и почему это важно. Два правила провайдера опираются на код OpenCode:
 1. СЖАТИЕ. Запрос сжатия OpenCode (`/compact` или автосжатие) провайдер узнаёт по тексту OpenCode
-   (`COMPACTION_OPENINGS` и заголовок шаблона `## Objective` в `lib.js`) и вместо пересказа OpenCode запускает
+   (`COMPACTION_OPENINGS` и заголовок шаблона `## Objective` в `src/lib.js`) и вместо пересказа OpenCode запускает
    настоящий `/compact` Claude Code в сессии окна. Не узнал — пересказ OpenCode снова тратит полный ход Claude
    и удлиняет память Claude Code, а не сжимает её.
 2. СЛУЖЕБНЫЕ ЗАПРОСЫ (заголовок и т.п.) провайдер узнаёт по тому, что в них НЕТ инструментов
-   (`isHelperRequest` в `lib.js`). Если OpenCode начал слать инструменты — запрос заголовка снова станет
+   (`isHelperRequest` в `src/lib.js`). Если OpenCode начал слать инструменты — запрос заголовка снова станет
    полным ходом Claude и повторит сообщение окна (письмо peer_send уйдёт дважды).
 
 Порядок работы:
@@ -33,8 +33,8 @@
      из трёх коротких ходов (`opencode run --server http://127.0.0.1:4799 --session <id> ...`), затем
      `opencode api --server http://127.0.0.1:4799 session.compact --param sessionID=<id> --data "{}"`.
 4. По файлу пробы найди новый запрос сжатия (последнее сообщение пользователя) и запрос заголовка (поле `tools`).
-   Обнови `COMPACTION_OPENINGS` / заголовок шаблона или `isHelperRequest` в `lib.js` и соответствующую проверку в
-   `opencode-check.js`; образцы в `test/opencode-check.test.js` приведи к новому OpenCode.
+   Обнови `COMPACTION_OPENINGS` / заголовок шаблона или `isHelperRequest` в `src/lib.js` и соответствующую проверку в
+   `src/opencode-check.js`; образцы в `test/opencode-check.test.js` приведи к новому OpenCode.
 5. Докажи в обе стороны: `npm test` зелёный; сломай новое условие — тест красный; верни — зелёный.
 6. Живая проверка в той же песочнице: сжатие завершилось (`compaction completed`, ответ «Claude Code compacted…»),
    в сессии Claude Code есть команда `/compact` и нет запроса OpenCode «summarize»; следующий ход читает меньше

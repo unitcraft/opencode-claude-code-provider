@@ -62,7 +62,7 @@ export function installedOpenCodeVersion(file = findOpenCode()) {
 }
 
 /** The ready prompt for an agent that adapts the provider to a new OpenCode. */
-export const ADAPT_PROMPT = path.join(path.dirname(fileURLToPath(import.meta.url)), "docs", "adapt-to-opencode.md")
+export const ADAPT_PROMPT = path.join(path.dirname(path.dirname(fileURLToPath(import.meta.url))), "docs", "adapt-to-opencode.md") // src/../docs
 
 /** "opencode/latest/2.0.22/cli" -> "2.0.22". */
 export function openCodeVersion(headers) {

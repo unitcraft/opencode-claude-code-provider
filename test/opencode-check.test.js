@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { test } from "node:test"
-import { checkOpenCodeFile, checkOpenCodeProgram, findOpenCode, openCodeVersion, readCheckState, watchOpenCode } from "../opencode-check.js"
+import { checkOpenCodeFile, checkOpenCodeProgram, findOpenCode, openCodeVersion, readCheckState, watchOpenCode } from "../src/opencode-check.js"
 
 // The parts of OpenCode 2.0.22's program the rules depend on (shortened, same shapes).
 const GOOD = [

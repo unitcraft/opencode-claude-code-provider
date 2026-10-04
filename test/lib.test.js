@@ -5,8 +5,8 @@ import os from "node:os"
 import path from "node:path"
 import { DatabaseSync } from "node:sqlite"
 import { test } from "node:test"
-import { compactionAnswer, texts } from "../texts.js"
-import { autoCompactWindowFor, disabledTools, helperSettings, rawUserTurn, isCompactionRequest, isHelperRequest, loadSessionMap, peersMcpServer, resolvePeersMcp, saveSessionMap, sessionDirectory } from "../lib.js"
+import { compactionAnswer, texts } from "../src/texts.js"
+import { autoCompactWindowFor, disabledTools, helperSettings, rawUserTurn, isCompactionRequest, isHelperRequest, loadSessionMap, peersMcpServer, resolvePeersMcp, saveSessionMap, sessionDirectory } from "../src/lib.js"
 
 function fakeOpencode() {
   const data = mkdtempSync(path.join(os.tmpdir(), "occ-"))

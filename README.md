@@ -91,7 +91,7 @@ cd D:/Sources/opencode-claude-code-provider && npm install
 
 ## Settings: defaults, machine, project
 
-Three layers, each over the previous one (`settings.js`):
+Three layers, each over the previous one (`src/settings.js`):
 
 1. **Built-in defaults** -- nothing to configure for the usual case: English lines;
    `autoCompactWindow` opus 400k, sonnet 400k, haiku 160k tokens; the built-in Claude Code tools
@@ -161,8 +161,8 @@ turn again. By hand: `npm run check-opencode`.
      `opencode api --server http://127.0.0.1:4799 session.compact --param sessionID=<id> --data "{}"`;
    - title: a new session with the `title` agent on `claude-code/...`.
 3. In the probe file find the compaction request (last user message) and the title request
-   (`tools`), and update `COMPACTION_OPENINGS` in `lib.js` (and the heading, if the template
-   changed) or `isHelperRequest`; in `opencode-check.js` update the matching check.
+   (`tools`), and update `COMPACTION_OPENINGS` in `src/lib.js` (and the heading, if the template
+   changed) or `isHelperRequest`; in `src/opencode-check.js` update the matching check.
 4. `npm test` (the shapes in `test/opencode-check.test.js` follow the new OpenCode), then repeat
    step 2: compaction completed ("Claude Code compacted ..."), Claude Code's session shows its own
    `/compact` and no OpenCode summary request, the next turn reads fewer tokens; the
@@ -188,6 +188,20 @@ Other OpenCode plugins of the same set (they work independently; together they a
 - [opencode-peers](https://github.com/unitcraft/opencode-peers) — letters between OpenCode windows, addressed by `project.role`
 - [opencode-windows-env](https://github.com/unitcraft/opencode-windows-env) — a sane command environment on Windows and a time stamp on agent messages
 - [opencode-claude-guards](https://github.com/unitcraft/opencode-claude-guards) — the repository's Claude Code rules (hooks, permissions) in OpenCode windows
+
+## Layout and versions
+
+- `index.js` -- the entry OpenCode loads (`aisdk:file:///<repo>/index.js`); it only re-exports the
+  factory from `src/provider.js`.
+- `src/` -- the provider: `provider.js` (requests), `lib.js` (sessions, recognizing OpenCode's
+  requests, raw user text), `settings.js` (three layers), `notes.js` (lines shown in the window),
+  `texts.js` (every such line, en/ru), `tools-report.js` (`/cc-tools`), `opencode-check.js`
+  (the check after OpenCode updates).
+- `ai-sdk-provider-claude-code` **4.x** (AI SDK v7, LanguageModelV4; Node >= 22). OpenCode 2.0.22
+  bundles AI SDK 6 models but calls providers with its own code and accepts V4 models (measured
+  2026-10-05: text, tool events and token accounting all arrive). From 4.x the provider uses
+  `onSdkMessage`: Claude Code's `compact_boundary` gives the numbers of a compaction
+  ("72k tokens -> 9k tokens") in the window line and in the `/compact` answer.
 
 ## Test
 

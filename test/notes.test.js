@@ -1,8 +1,8 @@
 // node --test test/
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { compactionHooks, noteChannel } from "../notes.js"
-import { texts } from "../texts.js"
+import { compactionWatch, noteChannel } from "../src/notes.js"
+import { texts } from "../src/texts.js"
 
 function collector() {
   const out = []
@@ -40,16 +40,30 @@ test("drain shows what still waits; take hands notes to doGenerate", () => {
   assert.deepEqual(b.take(), [])
 })
 
-test("compaction hooks: started and finished notes, the user's own hooks kept", async () => {
+test("compaction watch: start from PreCompact, the end with numbers from compact_boundary, user hooks kept", async () => {
   const notes = noteChannel()
   const mine = { hooks: [async () => ({ continue: true })] }
-  const hooks = compactionHooks(notes, { PreCompact: [mine], Stop: [mine] }, "ru")
-  assert.equal(hooks.PreCompact[0], mine)
-  assert.equal(hooks.Stop[0], mine)
-  assert.deepEqual(await hooks.PreCompact[1].hooks[0]({ trigger: "auto" }), { continue: true })
-  await hooks.PostCompact[0].hooks[0]({ trigger: "auto" })
-  const shown = notes.take()
-  assert.equal(shown[0], texts("ru").compactStarted("auto"))
-  assert.equal(shown[1], texts("ru").compactEnded(1))
-  assert.match(texts().compactEnded(3), /^✓ Context compacted in 3 s\.$/) // English by default
+  const seen = []
+  const w = compactionWatch(notes, { userHooks: { PreCompact: [mine], Stop: [mine] }, userOnSdkMessage: (m) => seen.push(m.subtype), language: "en" })
+  assert.equal(w.hooks.PreCompact[0], mine)
+  assert.equal(w.hooks.Stop[0], mine)
+  assert.deepEqual(await w.hooks.PreCompact[1].hooks[0]({ trigger: "auto" }), { continue: true })
+  w.onSdkMessage({ type: "system", subtype: "status", status: null, compact_result: "success" })
+  w.onSdkMessage({ type: "system", subtype: "compact_boundary", compact_metadata: { trigger: "auto", pre_tokens: 34745, post_tokens: 1906, duration_ms: 14183 } })
+  w.finish() // nothing pending any more
+  assert.deepEqual(notes.take(), [texts("en").compactStarted("auto"), "✓ Context compacted in 14 s (35k tokens → 2k tokens)."])
+  assert.deepEqual(seen, ["status", "compact_boundary"]) // the user's onSdkMessage still gets everything
+})
+
+test("compaction watch: a failed compaction is shown; no boundary -> a plain end line", async () => {
+  const a = noteChannel()
+  const wa = compactionWatch(a, { language: "ru" })
+  await wa.hooks.PreCompact[0].hooks[0]({ trigger: "manual" })
+  wa.onSdkMessage({ type: "system", subtype: "status", compact_result: "failed", compact_error: "prompt too long" })
+  assert.deepEqual(a.take().slice(1), ["✗ Claude Code не смог сжать контекст: prompt too long"])
+  const b = noteChannel()
+  const wb = compactionWatch(b, {})
+  await wb.hooks.PreCompact[0].hooks[0]({ trigger: "auto" })
+  wb.finish()
+  assert.match(b.take()[1], /^✓ Context compacted in \d+ s\.$/)
 })

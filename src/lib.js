@@ -83,7 +83,7 @@ export function saveSessionMap(map, file = sessionMapFile()) {
  * OpenCode session. `option`: path to opencode-peers' mcp.ts, `false` to switch off, unset -> the sibling
  * checkout `../opencode-peers/mcp.ts` next to this provider when it exists. Undefined -> no server.
  */
-export function resolvePeersMcp(option, here = path.dirname(fileURLToPath(import.meta.url))) {
+export function resolvePeersMcp(option, here = path.dirname(path.dirname(fileURLToPath(import.meta.url)))) { // here: the package root (src/..)
   if (option === false) return undefined
   const file = typeof option === "string" && option ? path.resolve(option) : path.resolve(here, "..", "opencode-peers", "mcp.ts")
   return existsSync(file) ? file : undefined

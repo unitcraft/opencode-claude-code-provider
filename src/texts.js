@@ -7,7 +7,8 @@ const clamp = (threshold, contextWindow) => Math.min(Math.max(threshold, 100_000
 
 const en = {
   compactStarted: (trigger) => (trigger === "auto" ? "⏳ Claude Code is compacting its context (automatically: the window's memory is full)…" : "⏳ Claude Code is compacting its context…"),
-  compactEnded: (s) => `✓ Context compacted in ${s} s.`,
+  compactEnded: (s, pre, post) => `✓ Context compacted in ${s} s${pre && post ? ` (${k(pre)} → ${k(post)})` : ""}.`,
+  compactFailedNote: (why) => `✗ Claude Code could not compact its context: ${why}`,
   checkWarning: (state, prompt) =>
     `⚠ claude-code: OpenCode ${state.version} changed — ${state.problems.join("; ")}. Compaction or helper requests may spend Claude turns again. Fix: give an agent the ready prompt ${prompt} (reminder every hour until fixed).`,
   threshold: ({ model, threshold, contextWindow }) => {
@@ -16,7 +17,7 @@ const en = {
       ? `Claude Code compacts automatically at ~${k(clamp(threshold, contextWindow))} (setting autoCompactWindow; ${win}).`
       : `Claude Code compacts automatically at a limit it picks itself (${win}; set your own with the setting autoCompactWindow).`
   },
-  compactDone: ({ seconds }) => `/compact: Claude Code compacted this window's memory in ${seconds} s. The model continues from its own Claude Code session.`,
+  compactDone: ({ seconds, pre, post }) => `/compact: Claude Code compacted this window's memory in ${seconds} s${pre && post ? `: ${k(pre)} → ${k(post)}` : ""}. The model continues from its own Claude Code session.`,
   compactNothing: "/compact: nothing to compact yet — this window has no Claude Code session yet.",
   compactFailed: (why) => `/compact: Claude Code did not compact (${why}). The window continues as it was.`,
   important: "Important Context",
@@ -31,7 +32,8 @@ const en = {
 
 const ru = {
   compactStarted: (trigger) => (trigger === "auto" ? "⏳ Claude Code сжимает контекст (автоматически, память окна заполнилась)…" : "⏳ Claude Code сжимает контекст…"),
-  compactEnded: (s) => `✓ Контекст сжат за ${s} с.`,
+  compactEnded: (s, pre, post) => `✓ Контекст сжат за ${s} с${pre && post ? ` (${k(pre, "ru")} → ${k(post, "ru")})` : ""}.`,
+  compactFailedNote: (why) => `✗ Claude Code не смог сжать контекст: ${why}`,
   checkWarning: (state, prompt) =>
     `⚠ claude-code: OpenCode ${state.version} изменился — ${state.problems.join("; ")}. Сжатие или служебные запросы могут снова тратить ходы Claude. Что делать: дать агенту готовый промпт ${prompt} (напоминание — раз в час, пока не исправлено).`,
   threshold: ({ model, threshold, contextWindow }) => {
@@ -40,7 +42,7 @@ const ru = {
       ? `Claude Code сжимает память сам, когда она дорастёт до ~${k(clamp(threshold, contextWindow), "ru")} (настройка autoCompactWindow; ${win}).`
       : `Claude Code сжимает память сам у предела, который выбирает сам (${win}; свой порог — настройка autoCompactWindow).`
   },
-  compactDone: ({ seconds }) => `/compact: Claude Code сжал память окна за ${seconds} с. Модель продолжает из своей сессии Claude Code.`,
+  compactDone: ({ seconds, pre, post }) => `/compact: Claude Code сжал память окна за ${seconds} с${pre && post ? `: ${k(pre, "ru")} → ${k(post, "ru")}` : ""}. Модель продолжает из своей сессии Claude Code.`,
   compactNothing: "/compact: сжимать пока нечего — у окна ещё нет сессии Claude Code.",
   compactFailed: (why) => `/compact: Claude Code не сжал память (${why}). Окно продолжает как было.`,
   important: "Important Context",

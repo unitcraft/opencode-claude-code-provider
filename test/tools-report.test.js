@@ -4,8 +4,8 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { test } from "node:test"
-import { toolSources } from "../settings.js"
-import { isToolsCommand, toolsReport } from "../tools-report.js"
+import { toolSources } from "../src/settings.js"
+import { isToolsCommand, toolsReport } from "../src/tools-report.js"
 
 const msg = (text) => [{ role: "user", content: [{ type: "text", text }] }]
 
