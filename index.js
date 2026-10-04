@@ -9,13 +9,15 @@
 //   * one Claude Code session per OpenCode session (`resume`): a turn sends only the new
 //     user message, Claude Code keeps its own transcript, the prompt cache works as in CLI;
 //   * images: streaming input is always on;
+//   * helper requests of OpenCode (title, summary: no tools) are plain model calls, not turns;
 //   * letters between OpenCode windows: OpenCode's tool list is dropped, so the opencode-peers tools
 //     (peer_list, peer_send, ...) come to Claude Code as the MCP server `peers`, acting for the
 //     requesting OpenCode session.
 // OpenCode loads the FIRST export whose name starts with "create", so this module exports
 // only the factory (the package itself exports createAPICallError first).
 import { createClaudeCode as createBase } from "ai-sdk-provider-claude-code"
-import { sessionDirectory, loadSessionMap, saveSessionMap, resolvePeersMcp, peersMcpServer } from "./lib.js"
+import os from "node:os"
+import { sessionDirectory, loadSessionMap, saveSessionMap, resolvePeersMcp, peersMcpServer, isHelperRequest, helperSettings } from "./lib.js"
 
 const BASE_SETTINGS = {
   systemPrompt: { type: "preset", preset: "claude_code" },
@@ -65,6 +67,14 @@ export function createClaudeCode(options = {}) {
   const model = (modelId) => {
     const call = async (kind, callOptions) => {
       const ocSession = sessionIdOf(callOptions)
+      // Helper request (title, summary, ...): a plain model call, never a turn of the window's session.
+      if (isHelperRequest(callOptions)) {
+        const helper = createBase({
+          defaultSettings: { ...BASE_SETTINGS, ...userSettings, ...helperSettings(callOptions.prompt), cwd: os.tmpdir() },
+        }).languageModel(modelId)
+        const opts = { ...callOptions, prompt: callOptions.prompt.filter((m) => m.role !== "system"), tools: undefined, toolChoice: undefined }
+        return kind === "generate" ? helper.doGenerate(opts) : helper.doStream(opts)
+      }
       const cwd = ocSession ? await sessionDirectory(ocSession) : undefined
       if (!cwd) {
         throw new Error(

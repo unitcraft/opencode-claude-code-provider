@@ -102,3 +102,35 @@ export function peersMcpServer(file, session, { node = "node", env = process.env
     },
   }
 }
+
+/**
+ * HELPER REQUESTS. OpenCode's own helper agents (title, summary, ...) call the window's model with the
+ * window's session header but WITHOUT tools and with their own system prompt ("You are a title
+ * generator..."); an agent turn always carries OpenCode's tool list. Measured 2026-10-04: run as a
+ * Claude Code turn (Claude Code's prompt, tools, MCP, the window's session) the title request executed
+ * the window's user message a second time -- peer_send went out twice -- and raced the window's turn
+ * for the session map.
+ */
+export function isHelperRequest(callOptions) {
+  return !(Array.isArray(callOptions?.tools) && callOptions.tools.length > 0)
+}
+
+/**
+ * Claude Code as a plain model call for a helper request: OpenCode's system prompt, no tools, no MCP,
+ * no settings/CLAUDE.md/hooks, one turn, nothing persisted (no transcript, no resume, no session map).
+ */
+export function helperSettings(prompt) {
+  const system = prompt
+    .filter((m) => m.role === "system")
+    .map((m) => (typeof m.content === "string" ? m.content : (m.content ?? []).map((p) => p.text ?? "").join("")))
+    .join("\n\n")
+  return {
+    systemPrompt: system,
+    tools: [],
+    mcpServers: {},
+    strictMcpConfig: true,
+    settingSources: [],
+    persistSession: false,
+    maxTurns: 1,
+  }
+}

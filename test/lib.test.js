@@ -5,7 +5,7 @@ import os from "node:os"
 import path from "node:path"
 import { DatabaseSync } from "node:sqlite"
 import { test } from "node:test"
-import { loadSessionMap, peersMcpServer, resolvePeersMcp, saveSessionMap, sessionDirectory } from "../lib.js"
+import { helperSettings, isHelperRequest, loadSessionMap, peersMcpServer, resolvePeersMcp, saveSessionMap, sessionDirectory } from "../lib.js"
 
 function fakeOpencode() {
   const data = mkdtempSync(path.join(os.tmpdir(), "occ-"))
@@ -60,4 +60,26 @@ test("peers MCP server acts for the requesting OpenCode session, in the same mai
   const cfg = peersMcpServer("D:/x/mcp.ts", "ses_A", { env: { XDG_DATA_HOME: "D:/data", OTHER: "1" } })
   assert.deepEqual(cfg, { type: "stdio", command: "node", args: ["D:/x/mcp.ts"], env: { OPENCODE_PEERS_SESSION: "ses_A", XDG_DATA_HOME: "D:/data" } })
   assert.deepEqual(peersMcpServer("m.ts", "ses_B", { node: "C:/node.exe", env: {} }).env, { OPENCODE_PEERS_SESSION: "ses_B" })
+})
+
+test("helper requests (no tools: title, summary) are told apart from agent turns", () => {
+  // shapes measured 2026-10-04: the title request had 0 tools, the agent turn 12, both the same session header
+  assert.equal(isHelperRequest({ tools: undefined }), true)
+  assert.equal(isHelperRequest({ tools: [] }), true)
+  assert.equal(isHelperRequest({ tools: [{ type: "function", name: "bash" }] }), false)
+})
+
+test("a helper request runs as a plain call: its own system prompt, no tools, no MCP, nothing kept", () => {
+  const s = helperSettings([
+    { role: "system", content: "You are a title generator." },
+    { role: "system", content: "Rules." },
+    { role: "user", content: [{ type: "text", text: "Call peer_send" }] },
+  ])
+  assert.equal(s.systemPrompt, "You are a title generator.\n\nRules.")
+  assert.deepEqual(s.tools, [])
+  assert.deepEqual(s.mcpServers, {})
+  assert.equal(s.strictMcpConfig, true)
+  assert.deepEqual(s.settingSources, [])
+  assert.equal(s.persistSession, false)
+  assert.equal(s.maxTurns, 1)
 })

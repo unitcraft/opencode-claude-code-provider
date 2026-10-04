@@ -25,6 +25,12 @@ Nothing is spoofed: Claude Code runs under your own Claude login, exactly as in 
   (`permissionPrompts: none`) — OpenCode cannot relay Claude Code's prompts.
 - **Images:** streaming input is always on (base64/data URLs; remote URLs are not supported
   by the package).
+- **Helper requests are plain calls.** OpenCode's helper agents (`title`, `summary`) send the
+  window's session header but no tools and their own system prompt. Such a request runs Claude
+  Code with that system prompt, no tools, no MCP, no settings, one turn, nothing persisted — not
+  as a turn of the window's session. (Before 2026-10-04 it was a full turn: with `title` on
+  `claude-code` the window's message was executed twice — a `peer_send` letter went out twice —
+  and the title was the first line of that answer.) So `title` / `summary` may use `claude-code`.
 - **Letters between windows** ([opencode-peers](https://github.com/unitcraft/opencode-peers)):
   OpenCode's tool list is dropped, so the plugin's `peer_*` tools would be missing. Every request
   gets the peers MCP server (`node <opencode-peers>/mcp.ts`, tools `mcp__peers__peer_list`, ...,
@@ -60,9 +66,6 @@ cd D:/Sources/opencode-claude-code-provider && npm install
 
 - Tools are Claude Code's, not OpenCode's: OpenCode plugins that act on OpenCode tool calls
   or inject into OpenCode's system prompt do not reach these windows.
-- Keep OpenCode's `title` / `summary` agents on another model: on `claude-code` they become full
-  Claude Code turns with the window's user message and tools (measured 2026-10-04: a title
-  request repeated the window's `peer_send`, the letter went out twice).
 - Each new Claude Code session starts with ~28k tokens of Claude Code's own system prompt and
   tools (cached afterwards, as in the CLI).
 
