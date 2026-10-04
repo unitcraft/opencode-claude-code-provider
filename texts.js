@@ -13,8 +13,8 @@ const en = {
   threshold: ({ model, threshold, contextWindow }) => {
     const win = contextWindow ? `${model ?? "model"} window ${k(contextWindow)}` : `${model ?? "model"}`
     return threshold
-      ? `Claude Code compacts automatically at ~${k(clamp(threshold, contextWindow))} (provider option autoCompactWindow; ${win}).`
-      : `Claude Code compacts automatically at a limit it picks itself (${win}; set your own with the provider option autoCompactWindow).`
+      ? `Claude Code compacts automatically at ~${k(clamp(threshold, contextWindow))} (setting autoCompactWindow; ${win}).`
+      : `Claude Code compacts automatically at a limit it picks itself (${win}; set your own with the setting autoCompactWindow).`
   },
   compactDone: ({ seconds }) => `/compact: Claude Code compacted this window's memory in ${seconds} s. The model continues from its own Claude Code session.`,
   compactNothing: "/compact: nothing to compact yet — this window has no Claude Code session yet.",
@@ -30,8 +30,8 @@ const ru = {
   threshold: ({ model, threshold, contextWindow }) => {
     const win = contextWindow ? `окно модели ${model ?? ""} — ${k(contextWindow, "ru")}`.replace("  ", " ") : `модель ${model ?? ""}`.trim()
     return threshold
-      ? `Claude Code сжимает память сам, когда она дорастёт до ~${k(clamp(threshold, contextWindow), "ru")} (настройка autoCompactWindow провайдера; ${win}).`
-      : `Claude Code сжимает память сам у предела, который выбирает сам (${win}; свой порог — настройка autoCompactWindow провайдера).`
+      ? `Claude Code сжимает память сам, когда она дорастёт до ~${k(clamp(threshold, contextWindow), "ru")} (настройка autoCompactWindow; ${win}).`
+      : `Claude Code сжимает память сам у предела, который выбирает сам (${win}; свой порог — настройка autoCompactWindow).`
   },
   compactDone: ({ seconds }) => `/compact: Claude Code сжал память окна за ${seconds} с. Модель продолжает из своей сессии Claude Code.`,
   compactNothing: "/compact: сжимать пока нечего — у окна ещё нет сессии Claude Code.",

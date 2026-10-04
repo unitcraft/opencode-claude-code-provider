@@ -157,14 +157,15 @@ export function isCompactionRequest(prompt) {
 
 /** The summary OpenCode stores instead of a Claude Code turn (OpenCode checks the template headings). */
 
-/** autoCompactWindow of the provider options for a model: a number for every model, or { opus: n, sonnet: n, ... }. */
+/** autoCompactWindow for a model: a number for every model, or { opus: n, sonnet: n, "*": n } (exact, family, "*"). */
 export function autoCompactWindowFor(option, modelId) {
   if (typeof option === "number") return option
   if (!option || typeof option !== "object") return undefined
   const id = String(modelId).toLowerCase()
   if (typeof option[id] === "number") return option[id]
-  const family = Object.keys(option).find((k) => id.includes(k.toLowerCase()))
-  return family ? option[family] : undefined
+  const family = Object.keys(option).find((k) => k !== "*" && id.includes(k.toLowerCase()))
+  if (family && typeof option[family] === "number") return option[family]
+  return typeof option["*"] === "number" ? option["*"] : undefined
 }
 
 /**

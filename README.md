@@ -89,26 +89,41 @@ cd D:/Sources/opencode-claude-code-provider && npm install
 }
 ```
 
-## Options (provider `settings` in `opencode.jsonc`)
+## Settings: defaults, machine, project
+
+Three layers, each over the previous one (`settings.js`):
+
+1. **Built-in defaults** -- nothing to configure for the usual case: English lines;
+   `autoCompactWindow` opus 400k, sonnet 400k, haiku 160k tokens; the built-in Claude Code tools
+   that are useless in an OpenCode window switched off (claude.ai artifacts, agent teams,
+   scheduling/cloud, code review: ~12k tokens of every turn).
+2. **The machine**: the provider `settings` in `opencode.jsonc`.
+3. **The project**: `.opencode/claude-code.json` in the repository, searched upward from the
+   window's directory (the same way opencode-peers finds `.opencode/nova-peers.json`).
+
+Objects merge key by key (a project can switch one tool back on); `autoCompactWindow` as a single
+number means every model and replaces the per-model values. A broken project file is ignored and
+logged.
 
 ```jsonc
+// opencode.jsonc -> "providers" -> "claude-code" -> "settings"
 "settings": {
   "claudeConfigDir": "D:/Sources/.claude-accounts/nv-lang",
-  // Claude Code compacts its memory at this size (tokens); per model family or one number
-  "autoCompactWindow": { "opus": 400000, "sonnet": 400000, "haiku": 160000 },
-  // built-in Claude Code tools: false = removed from the context (useless in OpenCode windows)
-  "tools": {
-    "Artifact": false, "ArtifactComments": false, "ArtifactData": false, "DesignSync": false, // claude.ai artifacts
-    "Workflow": false, "ListAgents": false, "SendMessage": false,                           // agent teams (letters: peers)
-    "CronCreate": false, "CronDelete": false, "CronList": false, "ScheduleWakeup": false,
-    "RemoteTrigger": false, "PushNotification": false,                                     // scheduling, cloud
-    "ReportFindings": false                                                                 // code review
-  },
-  // the provider's own lines in windows (compaction notes, /compact answer, warnings): "en" or "ru"
-  "language": "en",
+  "language": "ru",                                    // the provider's own lines: "en" (default) | "ru"
+  "autoCompactWindow": { "opus": 500000 },             // per family (opus, sonnet, haiku, ...) or one number
+  "tools": { "WebSearch": false },                     // false = removed from Claude Code's context
   "peersMcp": "D:/Sources/opencode-plugins/opencode-peers/mcp.ts" // default: the sibling checkout
 }
 ```
+
+```jsonc
+// <repository>/.opencode/claude-code.json -- this project only
+{ "autoCompactWindow": { "haiku": 120000 }, "tools": { "Workflow": true } }
+```
+
+`autoCompactWindow` keys are the model names OpenCode sends (the keys of `models` in the provider
+config) and match by family, so `opus` also covers `claude-opus-5-5` or `opus[1m]`; Claude Code
+clamps the value to 100k ... the model's window.
 
 ## When OpenCode is updated
 

@@ -15,6 +15,8 @@
 //   * Claude Code compacting its context is shown in the window (it can take a while);
 //   * after every OpenCode update the rules above are checked against OpenCode's program; a failed
 //     check notifies (Windows notification, a warning in each window once, the log);
+//   * settings in three layers: built-in defaults, the provider options, the project's
+//     .opencode/claude-code.json (settings.js);
 //   * letters between OpenCode windows: OpenCode's tool list is dropped, so the opencode-peers tools
 //     (peer_list, peer_send, ...) come to Claude Code as the MCP server `peers`, acting for the
 //     requesting OpenCode session.
@@ -26,6 +28,7 @@ import { appendFileSync } from "node:fs"
 import path from "node:path"
 import { noteChannel, compactionHooks } from "./notes.js"
 import { texts, compactionAnswer } from "./texts.js"
+import { settingsFor } from "./settings.js"
 import { watchOpenCode, openCodeVersion, installedOpenCodeVersion, readCheckState, toast, CHECK_WARNING } from "./opencode-check.js"
 import { sessionDirectory, loadSessionMap, saveSessionMap, resolvePeersMcp, peersMcpServer, isHelperRequest, helperSettings, isCompactionRequest, autoCompactWindowFor, disabledTools, rawUserTurn, textResult, textStream } from "./lib.js"
 
@@ -87,7 +90,6 @@ export function createClaudeCode(options = {}) {
   }
   const sessions = loadSessionMap()
   const warned = new Set() // `version:session:hour` -- a failed check is repeated in each window once an hour
-  const lang = options.language ?? "en" // the provider's own lines in windows: "en" (default) or "ru"
   const contextWindows = new Map() // OpenCode session -> the model's window Claude Code reported last
   const modelNames = new Map() // OpenCode session -> the real model Claude Code ran (claude-haiku-4-5-...)
   // The OpenCode check runs at load too (no request needed) and reminds every hour while it fails.
@@ -106,10 +108,10 @@ export function createClaudeCode(options = {}) {
   }
   // Claude Code's own settings per request: the auto-compaction threshold of this model and the
   // built-in tools switched off (both from the provider options).
-  const claudeSettings = (modelId) => {
-    const threshold = autoCompactWindowFor(options.autoCompactWindow, modelId)
+  const claudeSettings = (modelId, cfg) => {
+    const threshold = autoCompactWindowFor(cfg.autoCompactWindow, modelId)
     // `tools: { "Artifact": false, ... }` -- a tool set to false is removed from Claude Code's context
-    const disabled = disabledTools(options.tools, userSettings.disallowedTools)
+    const disabled = disabledTools(cfg.tools, userSettings.disallowedTools)
     return {
       ...(threshold ? { env: { ...(userSettings.env ?? process.env), CLAUDE_CODE_AUTO_COMPACT_WINDOW: String(threshold) } } : {}),
       ...(disabled.length ? { disallowedTools: disabled } : {}),
@@ -132,19 +134,20 @@ export function createClaudeCode(options = {}) {
     // it really shrinks what Claude reads every turn. OpenCode gets a short answer in its template instead of
     // a summary (it keeps that as its own history, which Claude Code does not read).
     const compact = async (kind, callOptions, ocSession) => {
-      const t = texts(lang)
-      const limits = { model: modelNames.get(ocSession) ?? modelId, threshold: autoCompactWindowFor(options.autoCompactWindow, modelId), contextWindow: contextWindows.get(ocSession) }
-      const answer = (line) => (kind === "generate" ? textResult : textStream)(compactionAnswer(lang, line, limits))
+      const cwd = ocSession ? await sessionDirectory(ocSession) : undefined
+      const cfg = settingsFor(options, cwd, log)
+      const t = texts(cfg.language)
+      const limits = { model: modelNames.get(ocSession) ?? modelId, threshold: autoCompactWindowFor(cfg.autoCompactWindow, modelId), contextWindow: contextWindows.get(ocSession) }
+      const answer = (line) => (kind === "generate" ? textResult : textStream)(compactionAnswer(cfg.language, line, limits))
       const resume = ocSession ? sessions[ocSession] : undefined
       if (!resume) return answer(t.compactNothing)
-      const cwd = await sessionDirectory(ocSession)
       if (!cwd) return answer(t.compactFailed("unknown directory"))
       let compacted = false
       const hooks = { ...(userSettings.hooks ?? {}), PostCompact: [...(userSettings.hooks?.PostCompact ?? []), { hooks: [async () => ((compacted = true), { continue: true })] }] }
       const started = Date.now()
       try {
         const inner = createBase({
-          defaultSettings: { ...BASE_SETTINGS, ...userSettings, ...claudeSettings(modelId), ...peersSettings(ocSession), hooks, cwd, resume },
+          defaultSettings: { ...BASE_SETTINGS, ...userSettings, ...claudeSettings(modelId, cfg), ...peersSettings(ocSession), hooks, cwd, resume },
         }).languageModel(modelId)
         // raw "/compact" (a system-role message goes in without the package's "Human: " prefix)
         await inner.doGenerate({ ...callOptions, prompt: [{ role: "system", content: "/compact" }], tools: undefined, toolChoice: undefined })
@@ -182,15 +185,16 @@ export function createClaudeCode(options = {}) {
         )
       }
       const resume = sessions[ocSession]
+      const cfg = settingsFor(options, cwd, log) // defaults < provider options < the project's file
       // Claude Code compacting its context shows in the window (it can take a while).
       const notes = noteChannel()
       if (check && !check.ok && !warned.has(`${check.version}:${ocSession}:${hour()}`)) {
         warned.add(`${check.version}:${ocSession}:${hour()}`)
-        notes.push(CHECK_WARNING(check, lang))
+        notes.push(CHECK_WARNING(check, cfg.language))
       }
-      const hooks = compactionHooks(notes, userSettings.hooks, lang)
+      const hooks = compactionHooks(notes, userSettings.hooks, cfg.language)
       const inner = createBase({
-        defaultSettings: { ...BASE_SETTINGS, ...userSettings, ...claudeSettings(modelId), ...peersSettings(ocSession), hooks, cwd, ...(resume ? { resume } : {}) },
+        defaultSettings: { ...BASE_SETTINGS, ...userSettings, ...claudeSettings(modelId, cfg), ...peersSettings(ocSession), hooks, cwd, ...(resume ? { resume } : {}) },
       }).languageModel(modelId)
       // The user's text goes to Claude Code as typed (no "Human: " prefix of the package).
       const prompt = rawUserTurn(resume ? lastUserTurn(callOptions.prompt) : callOptions.prompt.filter((m) => m.role !== "system"))
