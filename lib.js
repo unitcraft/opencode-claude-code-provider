@@ -2,6 +2,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"
+import { fileURLToPath } from "node:url"
 
 /** OpenCode's data directory (XDG_DATA_HOME/opencode, default ~/.local/share/opencode). */
 export function opencodeDataDir(env = process.env) {
@@ -74,5 +75,30 @@ export function saveSessionMap(map, file = sessionMapFile()) {
     renameSync(tmp, file)
   } catch {
     // losing the map only costs a fresh Claude Code session on the next turn
+  }
+}
+
+/**
+ * Letters between OpenCode windows (opencode-peers) for Claude Code: its stdio MCP server, run for ONE
+ * OpenCode session. `option`: path to opencode-peers' mcp.ts, `false` to switch off, unset -> the sibling
+ * checkout `../opencode-peers/mcp.ts` next to this provider when it exists. Undefined -> no server.
+ */
+export function resolvePeersMcp(option, here = path.dirname(fileURLToPath(import.meta.url))) {
+  if (option === false) return undefined
+  const file = typeof option === "string" && option ? path.resolve(option) : path.resolve(here, "..", "opencode-peers", "mcp.ts")
+  return existsSync(file) ? file : undefined
+}
+
+/** MCP server config (Claude Agent SDK `mcpServers` entry) acting for OpenCode session `session`. */
+export function peersMcpServer(file, session, { node = "node", env = process.env } = {}) {
+  return {
+    type: "stdio",
+    command: node,
+    args: [file],
+    env: {
+      OPENCODE_PEERS_SESSION: session,
+      // the same mailbox as the OpenCode server's plugin
+      ...(env.XDG_DATA_HOME ? { XDG_DATA_HOME: env.XDG_DATA_HOME } : {}),
+    },
   }
 }

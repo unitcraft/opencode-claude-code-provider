@@ -8,11 +8,14 @@
 //     (OpenCode's system prompt describes OpenCode tools Claude Code does not have);
 //   * one Claude Code session per OpenCode session (`resume`): a turn sends only the new
 //     user message, Claude Code keeps its own transcript, the prompt cache works as in CLI;
-//   * images: streaming input is always on.
+//   * images: streaming input is always on;
+//   * letters between OpenCode windows: OpenCode's tool list is dropped, so the opencode-peers tools
+//     (peer_list, peer_send, ...) come to Claude Code as the MCP server `peers`, acting for the
+//     requesting OpenCode session.
 // OpenCode loads the FIRST export whose name starts with "create", so this module exports
 // only the factory (the package itself exports createAPICallError first).
 import { createClaudeCode as createBase } from "ai-sdk-provider-claude-code"
-import { sessionDirectory, loadSessionMap, saveSessionMap } from "./lib.js"
+import { sessionDirectory, loadSessionMap, saveSessionMap, resolvePeersMcp, peersMcpServer } from "./lib.js"
 
 const BASE_SETTINGS = {
   systemPrompt: { type: "preset", preset: "claude_code" },
@@ -47,6 +50,17 @@ export function createClaudeCode(options = {}) {
     ...(options.defaultSettings ?? {}),
   }
   const sessions = loadSessionMap()
+  // opencode-peers MCP server: `peersMcp` (path to its mcp.ts, false = off), default the sibling checkout.
+  const peersMcp = resolvePeersMcp(options.peersMcp)
+  const peersSettings = (ocSession) => {
+    if (!peersMcp) return {}
+    return {
+      mcpServers: { ...(userSettings.mcpServers ?? {}), peers: peersMcpServer(peersMcp, ocSession, { node: options.peersNode || "node" }) },
+      // Auto-allowed (no prompt can be shown). With the user's own disallowedTools the package would drop
+      // them in favour of allowedTools, so then the letters fall back to permissionMode.
+      ...(userSettings.disallowedTools ? {} : { allowedTools: [...(userSettings.allowedTools ?? []), "mcp__peers"] }),
+    }
+  }
 
   const model = (modelId) => {
     const call = async (kind, callOptions) => {
@@ -60,7 +74,7 @@ export function createClaudeCode(options = {}) {
       }
       const resume = sessions[ocSession]
       const inner = createBase({
-        defaultSettings: { ...BASE_SETTINGS, ...userSettings, cwd, ...(resume ? { resume } : {}) },
+        defaultSettings: { ...BASE_SETTINGS, ...userSettings, ...peersSettings(ocSession), cwd, ...(resume ? { resume } : {}) },
       }).languageModel(modelId)
       const prompt = resume ? lastUserTurn(callOptions.prompt) : callOptions.prompt.filter((m) => m.role !== "system")
       const opts = { ...callOptions, prompt, tools: undefined, toolChoice: undefined }

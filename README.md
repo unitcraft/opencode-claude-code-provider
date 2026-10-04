@@ -25,6 +25,14 @@ Nothing is spoofed: Claude Code runs under your own Claude login, exactly as in 
   (`permissionPrompts: none`) — OpenCode cannot relay Claude Code's prompts.
 - **Images:** streaming input is always on (base64/data URLs; remote URLs are not supported
   by the package).
+- **Letters between windows** ([opencode-peers](https://github.com/unitcraft/opencode-peers)):
+  OpenCode's tool list is dropped, so the plugin's `peer_*` tools would be missing. Every request
+  gets the peers MCP server (`node <opencode-peers>/mcp.ts`, tools `mcp__peers__peer_list`, ...,
+  auto-allowed) acting for the requesting OpenCode session (`OPENCODE_PEERS_SESSION`, same
+  `XDG_DATA_HOME` mailbox). Its location: provider setting `peersMcp` (path to `mcp.ts`, `false`
+  turns it off), by default the sibling checkout `../opencode-peers/mcp.ts`; `peersNode` overrides
+  the `node` command (node >= 24). The project list is not repeated here: the peers plugin shares
+  its own. Incoming letters need nothing: the plugin puts them into the OpenCode session.
 - OpenCode loads the first export whose name starts with `create`; this module exports only
   `createClaudeCode` (the package exports `createAPICallError` first).
 
@@ -52,6 +60,9 @@ cd D:/Sources/opencode-claude-code-provider && npm install
 
 - Tools are Claude Code's, not OpenCode's: OpenCode plugins that act on OpenCode tool calls
   or inject into OpenCode's system prompt do not reach these windows.
+- Keep OpenCode's `title` / `summary` agents on another model: on `claude-code` they become full
+  Claude Code turns with the window's user message and tools (measured 2026-10-04: a title
+  request repeated the window's `peer_send`, the letter went out twice).
 - Each new Claude Code session starts with ~28k tokens of Claude Code's own system prompt and
   tools (cached afterwards, as in the CLI).
 
