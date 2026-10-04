@@ -42,6 +42,13 @@ test("the project's .opencode/opencode-claude-code-provider.json, found upward f
   assert.equal(findProjectSettings(path.join(root, "elsewhere")), undefined)
 })
 
+test("a project file saved with a BOM (Notepad, PowerShell 5.1) is read", () => {
+  const repo = mkdtempSync(path.join(os.tmpdir(), "occ-settings-bom-"))
+  mkdirSync(path.join(repo, ".opencode"))
+  writeFileSync(path.join(repo, ".opencode", "opencode-claude-code-provider.json"), "\uFEFF" + JSON.stringify({ tools: { Bash: false } }))
+  assert.equal(disabledTools(settingsFor({}, repo).tools).includes("Bash"), true)
+})
+
 test("a broken project file is ignored (logged), the rest still applies", () => {
   const repo = mkdtempSync(path.join(os.tmpdir(), "occ-settings-bad-"))
   mkdirSync(path.join(repo, ".opencode"))

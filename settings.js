@@ -52,7 +52,8 @@ export function findProjectSettings(dir) {
     const file = path.join(d, PROJECT_FILE)
     if (existsSync(file)) {
       try {
-        return { file, settings: JSON.parse(readFileSync(file, "utf8")) }
+        // a BOM at the start (Notepad, PowerShell 5.1 "utf8") is not part of the JSON
+        return { file, settings: JSON.parse(readFileSync(file, "utf8").replace(/^\uFEFF/, "")) }
       } catch (e) {
         return { file, error: String(e?.message ?? e) }
       }
