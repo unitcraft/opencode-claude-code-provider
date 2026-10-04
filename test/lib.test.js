@@ -5,7 +5,7 @@ import os from "node:os"
 import path from "node:path"
 import { DatabaseSync } from "node:sqlite"
 import { test } from "node:test"
-import { COMPACTION_SUMMARY, helperSettings, isCompactionRequest, isHelperRequest, loadSessionMap, peersMcpServer, resolvePeersMcp, saveSessionMap, sessionDirectory } from "../lib.js"
+import { COMPACTION_SUMMARY, autoCompactWindowFor, compactionSummary, helperSettings, rawUserTurn, isCompactionRequest, isHelperRequest, loadSessionMap, peersMcpServer, resolvePeersMcp, saveSessionMap, sessionDirectory } from "../lib.js"
 
 function fakeOpencode() {
   const data = mkdtempSync(path.join(os.tmpdir(), "occ-"))
@@ -104,17 +104,43 @@ test("OpenCode's compaction request is recognized, both openings; ordinary turns
 
 test("the provider answers compaction itself: no Claude Code run, no session lookup", async () => {
   const { createClaudeCode } = await import("../index.js")
-  const model = createClaudeCode({ peersMcp: false }).languageModel("haiku")
+  const model = createClaudeCode({ peersMcp: false, watchOpenCode: false, autoCompactWindow: { haiku: 150000 } }).languageModel("haiku")
   const tools = [{ type: "function", name: "bash", inputSchema: { type: "object" } }]
   // no session header: a real run would be refused ("cannot resolve the directory"), so an answer proves no run
   const g = await model.doGenerate({ prompt: compactionAsk("You MUST summarize the conversation above into a structured summary"), tools, headers: {} })
-  assert.equal(g.content[0].text, COMPACTION_SUMMARY)
+  assert.equal(g.content[0].text, compactionSummary({ model: "haiku", threshold: 150000 }))
+  assert.match(g.content[0].text, /~150 тыс\. токенов/)
   assert.equal(g.usage.inputTokens.total, 0)
   const s = await model.doStream({ prompt: compactionAsk("Update the existing checkpoint in the conversation above into one consolidated summary"), tools, headers: {} })
   const parts = []
   for await (const p of s.stream) parts.push(p)
   assert.deepEqual(parts.map((p) => p.type), ["stream-start", "text-start", "text-delta", "text-end", "finish"])
-  assert.equal(parts[2].delta, COMPACTION_SUMMARY)
+  assert.equal(parts[2].delta, compactionSummary({ model: "haiku", threshold: 150000 }))
   // an ordinary turn still goes to Claude Code (here refused: no session)
   await assert.rejects(model.doGenerate({ prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }], tools, headers: {} }), /cannot resolve the directory/)
+})
+
+test("/compact answer names the threshold: configured (clamped as Claude Code does) or Claude Code's own", () => {
+  assert.match(compactionSummary({ model: "opus", threshold: 400000, contextWindow: 1000000 }), /~400 тыс\. токенов .*окно модели opus — 1000 тыс\. токенов/)
+  assert.match(compactionSummary({ model: "haiku", threshold: 500000, contextWindow: 200000 }), /~200 тыс\. токенов/) // above the window -> the window
+  assert.match(compactionSummary({ model: "haiku", threshold: 50000 }), /~100 тыс\. токенов/) // below Claude Code's minimum 100k
+  assert.match(compactionSummary({ model: "sonnet" }), /который Claude Code выбирает сам/)
+  assert.match(COMPACTION_SUMMARY, /^## Objective$/m)
+})
+
+test("autoCompactWindow: one number for all models, or per model family", () => {
+  assert.equal(autoCompactWindowFor(300000, "opus"), 300000)
+  assert.equal(autoCompactWindowFor({ opus: 400000, haiku: 150000 }, "opus"), 400000)
+  assert.equal(autoCompactWindowFor({ opus: 400000 }, "claude-opus-5-5"), 400000)
+  assert.equal(autoCompactWindowFor({ opus: 400000 }, "sonnet"), undefined)
+  assert.equal(autoCompactWindowFor(undefined, "opus"), undefined)
+})
+
+test("the user's text goes as typed: a text-only message becomes raw input, files stay a user message", () => {
+  assert.deepEqual(rawUserTurn([{ role: "user", content: [{ type: "text", text: "hi" }, { type: "text", text: "there" }] }]), [{ role: "system", content: "hi\nthere" }])
+  assert.deepEqual(rawUserTurn([{ role: "user", content: "hi" }]), [{ role: "system", content: "hi" }])
+  const withImage = [{ role: "user", content: [{ type: "text", text: "see" }, { type: "file", mediaType: "image/png", data: "AA==" }] }]
+  assert.equal(rawUserTurn(withImage), withImage)
+  const history = [{ role: "user", content: "a" }, { role: "assistant", content: "b" }, { role: "user", content: "c" }]
+  assert.equal(rawUserTurn(history), history) // a whole history (no resume) keeps its roles
 })

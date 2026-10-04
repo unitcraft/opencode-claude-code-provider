@@ -37,6 +37,17 @@ Nothing is spoofed: Claude Code runs under your own Claude login, exactly as in 
   (measured 2026-10-04). The provider recognizes OpenCode's compaction request and answers it with
   a short fixed note in OpenCode's format, without calling Claude. If OpenCode changes its
   compaction wording, the request is no longer recognized and is a normal turn again.
+- **The user's text goes to Claude Code as typed.** The package prefixes every user message with
+  `Human: ` (not configurable); a text-only message is passed as raw input instead, so Claude Code
+  gets exactly the typed text and its own slash commands (e.g. `/flow` from `.claude/commands`)
+  work. Messages with images or files keep the prefix.
+- **Auto-compaction threshold per model** (`autoCompactWindow`): Claude Code compacts its memory
+  when it reaches this size; unset -> Claude Code's own choice (measured: the full window for
+  1M models). Claude Code clamps it to 100k ... the model's window (a larger value = the window).
+  `/compact` in OpenCode answers with the threshold and the model's window instead of a summary.
+- **Built-in tools switched off** (`disabledTools`): they are removed from Claude Code's context.
+  Measured 2026-10-04 (Haiku, empty folder): all 35 built-in tools ~27k tokens per turn of ~34k;
+  without claude.ai artifacts, agent teams, scheduling and review tools (list below) 22k.
 - **Claude Code compacting its context is shown.** When Claude Code's own memory fills up it
   compacts it (measured: 19-36 s with Haiku); the window would look stuck. The SDK hooks
   `PreCompact` / `PostCompact` put two lines into the answer: "⏳ Claude Code сжимает контекст…"
@@ -73,6 +84,22 @@ cd D:/Sources/opencode-claude-code-provider && npm install
 }
 ```
 
+## Options (provider `settings` in `opencode.jsonc`)
+
+```jsonc
+"settings": {
+  "claudeConfigDir": "D:/Sources/.claude-accounts/nv-lang",
+  // Claude Code compacts its memory at this size (tokens); per model family or one number
+  "autoCompactWindow": { "opus": 400000, "sonnet": 400000, "haiku": 160000 },
+  // built-in Claude Code tools removed from the context (not usable from OpenCode windows anyway)
+  "disabledTools": ["Artifact", "ArtifactComments", "ArtifactData", "DesignSync",
+                    "Workflow", "ListAgents", "SendMessage",
+                    "CronCreate", "CronDelete", "CronList", "ScheduleWakeup", "RemoteTrigger",
+                    "PushNotification", "ReportFindings"],
+  "peersMcp": "D:/Sources/opencode-plugins/opencode-peers/mcp.ts" // default: the sibling checkout
+}
+```
+
 ## When OpenCode is updated
 
 Two rules depend on OpenCode's own code and would stop working silently (no error, only wasted
@@ -81,12 +108,15 @@ Claude turns): compaction is recognized by OpenCode's wording, helper requests b
 **Automatic check.** Every request carries OpenCode's version (`User-Agent`). On the first request
 of a new version the provider reads OpenCode's program (`opencode.exe`, its bundled JavaScript;
 ~0.3 s, no model call) and checks that the wording and the request shapes are still there. The
-result is kept in `<opencode data>/claude-code-provider-check.json`. A failed check: a Windows
-notification, a warning line once in each window, a line in `%TEMP%/nova-opencode-plugins.log`.
+result is kept in `<opencode data>/claude-code-provider-check.json`. The check also runs when the
+provider loads and every hour (so an `opencode upgrade` is noticed without any request). A failed
+check, repeated every hour until fixed: a Windows notification, a warning line in each window, a
+line in `%TEMP%/nova-opencode-plugins.log` -- all naming the ready prompt below.
 The rules themselves stay safe: an unrecognized compaction or helper request is simply a normal
 turn again. By hand: `npm run check-opencode`.
 
-**Adapting to a new OpenCode** (when the check fails):
+**Adapting to a new OpenCode**: give an agent the ready prompt `docs/adapt-to-opencode.md`
+(paste it into a window opened in `D:/Sources/opencode-plugins`). The steps it follows:
 
 1. `npm run check-opencode` -- which rule broke (`compaction: ...` or `title: ...`).
 2. See what OpenCode sends now, in a scratch data dir so open windows are untouched:
@@ -109,8 +139,13 @@ turn again. By hand: `npm run check-opencode`.
 
 - Tools are Claude Code's, not OpenCode's: OpenCode plugins that act on OpenCode tool calls
   or inject into OpenCode's system prompt do not reach these windows.
-- Every turn carries ~30-35k tokens of Claude Code's own system prompt, tools, MCP servers and
-  CLAUDE.md (measured 2026-10-04; written to the prompt cache once, then read from it each turn).
+- Every turn carries Claude Code's own part (measured 2026-10-04, Haiku): system prompt ~7k,
+  built-in tools ~27k (~15k with the `disabledTools` above), peers MCP ~0.2k,
+  account settings ~0.8k, plus the repository's CLAUDE.md with its imports (nova: ~12k,
+  nova-opencode: ~8k). Written to the prompt cache once, then read from it each turn.
+- OpenCode plugins that add to OpenCode's system prompt (opencode-windows-env's time hint) or act on
+  OpenCode's tool calls (opencode-claude-guards) do not reach these windows; the repository's own
+  `.claude` settings and hooks do.
 
 ## Test
 

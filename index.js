@@ -24,8 +24,8 @@ import os from "node:os"
 import { appendFileSync } from "node:fs"
 import path from "node:path"
 import { noteChannel, compactionHooks } from "./notes.js"
-import { watchOpenCode, openCodeVersion, CHECK_WARNING } from "./opencode-check.js"
-import { sessionDirectory, loadSessionMap, saveSessionMap, resolvePeersMcp, peersMcpServer, isHelperRequest, helperSettings, isCompactionRequest, COMPACTION_SUMMARY, textResult, textStream } from "./lib.js"
+import { watchOpenCode, openCodeVersion, installedOpenCodeVersion, readCheckState, toast, CHECK_WARNING } from "./opencode-check.js"
+import { sessionDirectory, loadSessionMap, saveSessionMap, resolvePeersMcp, peersMcpServer, isHelperRequest, helperSettings, isCompactionRequest, compactionSummary, autoCompactWindowFor, rawUserTurn, textResult, textStream } from "./lib.js"
 
 const BASE_SETTINGS = {
   systemPrompt: { type: "preset", preset: "claude_code" },
@@ -84,16 +84,41 @@ export function createClaudeCode(options = {}) {
     ...(options.defaultSettings ?? {}),
   }
   const sessions = loadSessionMap()
-  const warned = new Set() // OpenCode sessions that saw the failed-check warning for this version
+  const warned = new Set() // `version:session:hour` -- a failed check is repeated in each window once an hour
+  const contextWindows = new Map() // OpenCode session -> the model's window Claude Code reported last
+  // The OpenCode check runs at load too (no request needed) and reminds every hour while it fails.
+  const hour = () => Math.floor(Date.now() / 3_600_000)
+  if (options.watchOpenCode !== false) startWatch()
+  function startWatch() {
+  watchOpenCode(installedOpenCodeVersion(), { log })
+  setInterval(() => {
+    const version = installedOpenCodeVersion()
+    const state = watchOpenCode(version, { log })
+    if (state && !state.ok) {
+      log(`opencode ${state.version}: still failing: ${state.problems.join("; ")}`)
+      toast(`claude-code: OpenCode ${state.version} changed`, state.problems.join("; "))
+    }
+  }, 3_600_000).unref?.()
+  }
+  // Claude Code's own settings per request: the auto-compaction threshold of this model and the
+  // built-in tools switched off (both from the provider options).
+  const claudeSettings = (modelId) => {
+    const threshold = autoCompactWindowFor(options.autoCompactWindow, modelId)
+    const disabled = [...(userSettings.disallowedTools ?? []), ...(options.disabledTools ?? [])]
+    return {
+      ...(threshold ? { env: { ...(userSettings.env ?? process.env), CLAUDE_CODE_AUTO_COMPACT_WINDOW: String(threshold) } } : {}),
+      ...(disabled.length ? { disallowedTools: disabled } : {}),
+    }
+  }
   // opencode-peers MCP server: `peersMcp` (path to its mcp.ts, false = off), default the sibling checkout.
   const peersMcp = resolvePeersMcp(options.peersMcp)
   const peersSettings = (ocSession) => {
     if (!peersMcp) return {}
     return {
       mcpServers: { ...(userSettings.mcpServers ?? {}), peers: peersMcpServer(peersMcp, ocSession, { node: options.peersNode || "node" }) },
-      // Auto-allowed (no prompt can be shown). With the user's own disallowedTools the package would drop
-      // them in favour of allowedTools, so then the letters fall back to permissionMode.
-      ...(userSettings.disallowedTools ? {} : { allowedTools: [...(userSettings.allowedTools ?? []), "mcp__peers"] }),
+      // Auto-allowed (no prompt can be shown). The package passes allowedTools and disallowedTools both
+      // (its warning that only allowedTools is used is not what its code does).
+      allowedTools: [...(userSettings.allowedTools ?? []), "mcp__peers"],
     }
   }
 
@@ -104,9 +129,12 @@ export function createClaudeCode(options = {}) {
       // text included) -- for adapting to a new OpenCode (README, "When OpenCode is updated").
       if (process.env.CLAUDE_CODE_PROVIDER_PROBE) recordRequest(process.env.CLAUDE_CODE_PROVIDER_PROBE, kind, callOptions)
       // Once per OpenCode version: do the rules below still match OpenCode? (runs in the background)
-      const check = watchOpenCode(openCodeVersion(callOptions.headers), { log })
+      const check = options.watchOpenCode === false ? undefined : (watchOpenCode(openCodeVersion(callOptions.headers), { log }) ?? readCheckState())
       // OpenCode's compaction: Claude Code keeps and compacts its own session, so answer without a turn.
-      if (isCompactionRequest(callOptions.prompt)) return kind === "generate" ? textResult(COMPACTION_SUMMARY) : textStream(COMPACTION_SUMMARY)
+      if (isCompactionRequest(callOptions.prompt)) {
+        const summary = compactionSummary({ model: modelId, threshold: autoCompactWindowFor(options.autoCompactWindow, modelId), contextWindow: contextWindows.get(ocSession) })
+        return kind === "generate" ? textResult(summary) : textStream(summary)
+      }
       // Helper request (title, summary, ...): a plain model call, never a turn of the window's session.
       if (isHelperRequest(callOptions)) {
         const helper = createBase({
@@ -125,17 +153,22 @@ export function createClaudeCode(options = {}) {
       const resume = sessions[ocSession]
       // Claude Code compacting its context shows in the window (it can take a while).
       const notes = noteChannel()
-      if (check && !check.ok && !warned.has(`${check.version}:${ocSession}`)) {
-        warned.add(`${check.version}:${ocSession}`)
+      if (check && !check.ok && !warned.has(`${check.version}:${ocSession}:${hour()}`)) {
+        warned.add(`${check.version}:${ocSession}:${hour()}`)
         notes.push(CHECK_WARNING(check))
       }
       const hooks = compactionHooks(notes, userSettings.hooks)
       const inner = createBase({
-        defaultSettings: { ...BASE_SETTINGS, ...userSettings, ...peersSettings(ocSession), hooks, cwd, ...(resume ? { resume } : {}) },
+        defaultSettings: { ...BASE_SETTINGS, ...userSettings, ...claudeSettings(modelId), ...peersSettings(ocSession), hooks, cwd, ...(resume ? { resume } : {}) },
       }).languageModel(modelId)
-      const prompt = resume ? lastUserTurn(callOptions.prompt) : callOptions.prompt.filter((m) => m.role !== "system")
+      // The user's text goes to Claude Code as typed (no "Human: " prefix of the package).
+      const prompt = rawUserTurn(resume ? lastUserTurn(callOptions.prompt) : callOptions.prompt.filter((m) => m.role !== "system"))
       const opts = { ...callOptions, prompt, tools: undefined, toolChoice: undefined }
 
+      const noteWindow = (meta) => {
+        const cw = Object.values(meta?.["claude-code"]?.modelUsage ?? {}).map((u) => u?.contextWindow).find(Boolean)
+        if (cw) contextWindows.set(ocSession, cw)
+      }
       const remember = (id) => {
         if (id && sessions[ocSession] !== id) {
           sessions[ocSession] = id
@@ -145,6 +178,7 @@ export function createClaudeCode(options = {}) {
       if (kind === "generate") {
         const r = await inner.doGenerate(opts)
         remember(claudeSessionFrom(r))
+        noteWindow(r.providerMetadata)
         const shown = notes.take().map((text) => ({ type: "text", text: `_${text}_\n\n` }))
         return shown.length ? { ...r, content: [...shown, ...r.content] } : r
       }
@@ -157,6 +191,7 @@ export function createClaudeCode(options = {}) {
           transform(part, ctl) {
             if (part.type === "finish") {
               remember(claudeSessionFrom(part))
+              noteWindow(part.providerMetadata)
               notes.drain() // anything still waiting goes out before the end
             }
             notes.pass(part)

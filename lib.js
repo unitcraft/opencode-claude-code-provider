@@ -156,11 +156,49 @@ export function isCompactionRequest(prompt) {
 }
 
 /** The summary OpenCode stores instead of a Claude Code turn (OpenCode checks the template headings). */
-export const COMPACTION_SUMMARY = `## Objective
-- Not summarized: this window runs on the claude-code provider. Claude Code keeps the whole conversation in its own session and compacts it itself when needed, so OpenCode's compaction is skipped instead of spending a Claude turn.
+/**
+ * The answer to OpenCode's compaction (/compact): what the window shows instead of a summary. The heading
+ * "## Objective" is from OpenCode's template -- OpenCode accepts a summary only with one of its headings.
+ * `threshold`: the configured autoCompactWindow for this model (undefined = Claude Code's auto);
+ * `contextWindow`: the model's window as Claude Code reported it on this window's last turn, if known.
+ */
+export function compactionSummary({ model, threshold, contextWindow } = {}) {
+  const k = (n) => `${Math.round(n / 1000)} тыс. токенов`
+  const window = contextWindow ? `окно модели ${model ?? ""} — ${k(contextWindow)}`.replace("  ", " ") : `окно модели ${model ?? ""}`.trim()
+  const limit = threshold
+    ? `когда память дорастёт до ~${k(Math.min(Math.max(threshold, 100_000), contextWindow ?? Infinity))} (настройка autoCompactWindow провайдера; ${window})`
+    : `когда память подойдёт к пределу, который Claude Code выбирает сам (${window}; свой порог — настройка autoCompactWindow провайдера)`
+  return `## Objective
+- /compact здесь не нужен: это окно на провайдере claude-code. Память окна ведёт Claude Code и сжимает её сам — ${limit}. Начало и конец такого сжатия видны в окне строками «⏳ … сжимает контекст» и «✓ Контекст сжат».
 
 ## Important Context
-- The model continues from its own Claude Code session, not from this summary.`
+- Сжатие OpenCode пропущено, ход Claude не потрачен; модель продолжает из своей сессии Claude Code.`
+}
+export const COMPACTION_SUMMARY = compactionSummary()
+
+/** autoCompactWindow of the provider options for a model: a number for every model, or { opus: n, sonnet: n, ... }. */
+export function autoCompactWindowFor(option, modelId) {
+  if (typeof option === "number") return option
+  if (!option || typeof option !== "object") return undefined
+  const id = String(modelId).toLowerCase()
+  if (typeof option[id] === "number") return option[id]
+  const family = Object.keys(option).find((k) => id.includes(k.toLowerCase()))
+  return family ? option[family] : undefined
+}
+
+/**
+ * The newest user message as Claude Code's raw input. The package prefixes every user message with
+ * "Human: " (not configurable); a system-role message goes in verbatim. So a text-only user message is
+ * passed as such: Claude Code then gets exactly what the user typed (and its own slash commands work).
+ * A message with images or files stays a user message (the package attaches files to user messages only).
+ */
+export function rawUserTurn(messages) {
+  if (messages.length !== 1 || messages[0].role !== "user") return messages
+  const c = messages[0].content
+  if (typeof c === "string") return [{ role: "system", content: c }]
+  if (!Array.isArray(c) || !c.every((p) => p.type === "text")) return messages
+  return [{ role: "system", content: c.map((p) => p.text).join("\n") }]
+}
 
 /** A finished text answer without calling the model: for doGenerate (v3 result). */
 export function textResult(text) {

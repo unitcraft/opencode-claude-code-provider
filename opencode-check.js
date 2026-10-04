@@ -11,6 +11,7 @@ import { execSync, spawn } from "node:child_process"
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { readFile } from "node:fs/promises"
 import path from "node:path"
+import { fileURLToPath } from "node:url"
 import { COMPACTION_OPENINGS, opencodeDataDir } from "./lib.js"
 
 /** Check OpenCode's program text. `problems` empty -> the provider's rules still match. */
@@ -49,6 +50,18 @@ export function findOpenCode() {
   } catch {}
   return undefined
 }
+
+/** The installed OpenCode's version (package.json next to its program), without a request. */
+export function installedOpenCodeVersion(file = findOpenCode()) {
+  try {
+    return JSON.parse(readFileSync(path.join(path.dirname(path.dirname(file)), "package.json"), "utf8")).version
+  } catch {
+    return undefined
+  }
+}
+
+/** The ready prompt for an agent that adapts the provider to a new OpenCode. */
+export const ADAPT_PROMPT = path.join(path.dirname(fileURLToPath(import.meta.url)), "docs", "adapt-to-opencode.md")
 
 /** "opencode/latest/2.0.22/cli" -> "2.0.22". */
 export function openCodeVersion(headers) {
@@ -108,7 +121,7 @@ export function watchOpenCode(version, { dataDir = opencodeDataDir(), file = fin
       writeFileSync(stateFile(dataDir), JSON.stringify(next, null, 1))
     } catch {}
     log(`opencode ${version}: ${result.ok ? "ok" : "PROBLEMS " + result.problems.join("; ")}`)
-    if (!result.ok) notify(`claude-code: OpenCode ${version} changed`, result.problems.join("; "))
+    if (!result.ok) notify(`claude-code: OpenCode ${version} changed`, `${result.problems.join("; ")}. Prompt: ${ADAPT_PROMPT}`)
   })().finally(() => {
     watchOpenCode.running = undefined
   })
@@ -117,4 +130,4 @@ export function watchOpenCode(version, { dataDir = opencodeDataDir(), file = fin
 
 /** The warning a window shows once when the check for this OpenCode version failed. */
 export const CHECK_WARNING = (state) =>
-  `⚠ claude-code: OpenCode ${state.version} изменился — ${state.problems.join("; ")}. Сжатие или служебные запросы могут снова тратить ходы Claude. Что делать: README провайдера, раздел «Когда OpenCode обновился».`
+  `⚠ claude-code: OpenCode ${state.version} изменился — ${state.problems.join("; ")}. Сжатие или служебные запросы могут снова тратить ходы Claude. Что делать: дать агенту готовый промпт ${ADAPT_PROMPT} (напоминание — раз в час, пока не исправлено).`
