@@ -143,7 +143,7 @@ export function helperSettings(prompt) {
  * compaction cannot shrink what Claude Code sees, it only spends a turn. Claude Code compacts its own
  * session itself. Markers: OpenCode's two fixed openings and the template's first heading.
  */
-const COMPACTION_OPENINGS = [
+export const COMPACTION_OPENINGS = [
   "You MUST summarize the conversation above into a structured summary",
   "Update the existing checkpoint in the conversation above into one consolidated summary",
 ]

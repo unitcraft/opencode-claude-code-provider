@@ -37,6 +37,11 @@ Nothing is spoofed: Claude Code runs under your own Claude login, exactly as in 
   (measured 2026-10-04). The provider recognizes OpenCode's compaction request and answers it with
   a short fixed note in OpenCode's format, without calling Claude. If OpenCode changes its
   compaction wording, the request is no longer recognized and is a normal turn again.
+- **Claude Code compacting its context is shown.** When Claude Code's own memory fills up it
+  compacts it (measured: 19-36 s with Haiku); the window would look stuck. The SDK hooks
+  `PreCompact` / `PostCompact` put two lines into the answer: "⏳ Claude Code сжимает контекст…"
+  and "✓ Контекст сжат за N с." (written by the provider, no model call; a line never splits a
+  text block the model is streaming).
 - **Letters between windows** ([opencode-peers](https://github.com/unitcraft/opencode-peers)):
   OpenCode's tool list is dropped, so the plugin's `peer_*` tools would be missing. Every request
   gets the peers MCP server (`node <opencode-peers>/mcp.ts`, tools `mcp__peers__peer_list`, ...,
@@ -68,15 +73,48 @@ cd D:/Sources/opencode-claude-code-provider && npm install
 }
 ```
 
+## When OpenCode is updated
+
+Two rules depend on OpenCode's own code and would stop working silently (no error, only wasted
+Claude turns): compaction is recognized by OpenCode's wording, helper requests by having no tools.
+
+**Automatic check.** Every request carries OpenCode's version (`User-Agent`). On the first request
+of a new version the provider reads OpenCode's program (`opencode.exe`, its bundled JavaScript;
+~0.3 s, no model call) and checks that the wording and the request shapes are still there. The
+result is kept in `<opencode data>/claude-code-provider-check.json`. A failed check: a Windows
+notification, a warning line once in each window, a line in `%TEMP%/nova-opencode-plugins.log`.
+The rules themselves stay safe: an unrecognized compaction or helper request is simply a normal
+turn again. By hand: `npm run check-opencode`.
+
+**Adapting to a new OpenCode** (when the check fails):
+
+1. `npm run check-opencode` -- which rule broke (`compaction: ...` or `title: ...`).
+2. See what OpenCode sends now, in a scratch data dir so open windows are untouched:
+   set `XDG_DATA_HOME` / `XDG_CONFIG_HOME` to scratch folders (copy `opencode.jsonc` there),
+   set `CLAUDE_CODE_PROVIDER_PROBE=<file>` (records every request: tools, roles, text -- off by
+   default because it writes the window's text), then:
+   - compaction: `opencode serve --port 4799` (with `OPENCODE_PASSWORD` set), a session with
+     three short turns (`opencode run --server http://127.0.0.1:4799 ...`), then
+     `opencode api --server http://127.0.0.1:4799 session.compact --param sessionID=<id> --data "{}"`;
+   - title: a new session with the `title` agent on `claude-code/...`.
+3. In the probe file find the compaction request (last user message) and the title request
+   (`tools`), and update `COMPACTION_OPENINGS` in `lib.js` (and the heading, if the template
+   changed) or `isHelperRequest`; in `opencode-check.js` update the matching check.
+4. `npm test` (the shapes in `test/opencode-check.test.js` follow the new OpenCode), then repeat
+   step 2: compaction completed with cost 0 and no summary request in Claude Code's session; the
+   title request does not repeat the window's message.
+5. Delete `claude-code-provider-check.json` so the provider checks again; commit.
+
 ## Known limits
 
 - Tools are Claude Code's, not OpenCode's: OpenCode plugins that act on OpenCode tool calls
   or inject into OpenCode's system prompt do not reach these windows.
-- Each new Claude Code session starts with ~28k tokens of Claude Code's own system prompt and
-  tools (cached afterwards, as in the CLI).
+- Every turn carries ~30-35k tokens of Claude Code's own system prompt, tools, MCP servers and
+  CLAUDE.md (measured 2026-10-04; written to the prompt cache once, then read from it each turn).
 
 ## Test
 
 ```sh
 npm test
+npm run check-opencode   # does the installed OpenCode still match the rules?
 ```
