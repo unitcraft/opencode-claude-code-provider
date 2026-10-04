@@ -181,6 +181,14 @@ turn again. By hand: `npm run check-opencode`.
   OpenCode's tool calls (opencode-claude-guards) do not reach these windows; the repository's own
   `.claude` settings and hooks do.
 
+## Related
+
+Other OpenCode plugins of the same set (they work independently; together they are tested on one machine):
+
+- [opencode-peers](https://github.com/unitcraft/opencode-peers) — letters between OpenCode windows, addressed by `project.role`
+- [opencode-windows-env](https://github.com/unitcraft/opencode-windows-env) — a sane command environment on Windows and a time stamp on agent messages
+- [opencode-claude-guards](https://github.com/unitcraft/opencode-claude-guards) — the repository's Claude Code rules (hooks, permissions) in OpenCode windows
+
 ## Test
 
 ```sh
