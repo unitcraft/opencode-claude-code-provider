@@ -27,13 +27,13 @@ test("the machine's options over the defaults: objects merge key by key, a numbe
   for (const m of ["opus", "sonnet", "haiku", "fable"]) assert.equal(autoCompactWindowFor(all.autoCompactWindow, m), 250000)
 })
 
-test("the project's .opencode/claude-code.json, found upward from the window, is the last word", () => {
+test("the project's .opencode/opencode-claude-code-provider.json, found upward from the window, is the last word", () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "occ-settings-"))
   const repo = path.join(root, "repo")
   const deep = path.join(repo, "src", "deep")
   mkdirSync(path.join(repo, ".opencode"), { recursive: true })
   mkdirSync(deep, { recursive: true })
-  writeFileSync(path.join(repo, ".opencode", "claude-code.json"), JSON.stringify({ autoCompactWindow: { haiku: 120000 }, tools: { Workflow: true } }))
+  writeFileSync(path.join(repo, ".opencode", "opencode-claude-code-provider.json"), JSON.stringify({ autoCompactWindow: { haiku: 120000 }, tools: { Workflow: true } }))
   const s = settingsFor({ language: "ru", autoCompactWindow: { haiku: 150000 } }, deep)
   assert.equal(autoCompactWindowFor(s.autoCompactWindow, "haiku"), 120000) // project over machine
   assert.equal(s.language, "ru") // machine kept where the project says nothing
@@ -45,7 +45,7 @@ test("the project's .opencode/claude-code.json, found upward from the window, is
 test("a broken project file is ignored (logged), the rest still applies", () => {
   const repo = mkdtempSync(path.join(os.tmpdir(), "occ-settings-bad-"))
   mkdirSync(path.join(repo, ".opencode"))
-  writeFileSync(path.join(repo, ".opencode", "claude-code.json"), "{ not json")
+  writeFileSync(path.join(repo, ".opencode", "opencode-claude-code-provider.json"), "{ not json")
   const logs = []
   const s = settingsFor({ language: "ru" }, repo, (l) => logs.push(l))
   assert.equal(s.language, "ru")

@@ -16,7 +16,8 @@
 //   * after every OpenCode update the rules above are checked against OpenCode's program; a failed
 //     check notifies (Windows notification, a warning in each window once, the log);
 //   * settings in three layers: built-in defaults, the provider options, the project's
-//     .opencode/claude-code.json (settings.js);
+//     .opencode/opencode-claude-code-provider.json (settings.js);
+//   * `/cc-tools` typed in a window lists every Claude Code tool there and whether it is on (no model call);
 //   * letters between OpenCode windows: OpenCode's tool list is dropped, so the opencode-peers tools
 //     (peer_list, peer_send, ...) come to Claude Code as the MCP server `peers`, acting for the
 //     requesting OpenCode session.
@@ -28,7 +29,8 @@ import { appendFileSync } from "node:fs"
 import path from "node:path"
 import { noteChannel, compactionHooks } from "./notes.js"
 import { texts, compactionAnswer } from "./texts.js"
-import { settingsFor } from "./settings.js"
+import { settingsFor, toolSources } from "./settings.js"
+import { isToolsCommand, listClaudeTools, contextUsage, toolsReport } from "./tools-report.js"
 import { watchOpenCode, openCodeVersion, installedOpenCodeVersion, readCheckState, toast, CHECK_WARNING } from "./opencode-check.js"
 import { sessionDirectory, loadSessionMap, saveSessionMap, resolvePeersMcp, peersMcpServer, isHelperRequest, helperSettings, isCompactionRequest, autoCompactWindowFor, disabledTools, rawUserTurn, textResult, textStream } from "./lib.js"
 
@@ -160,6 +162,36 @@ export function createClaudeCode(options = {}) {
       return answer(compacted ? t.compactDone({ seconds }) : t.compactFailed("Claude Code reported no compaction"))
     }
 
+    // `/cc-tools`: Claude Code's tools in this window and their status, without a model call.
+    const toolsCommand = async (kind, callOptions, ocSession) => {
+      const cwd = ocSession ? await sessionDirectory(ocSession) : undefined
+      const cfg = settingsFor(options, cwd, log)
+      const sdk = (disallowedTools) => {
+        const c = claudeSettings(modelId, cfg)
+        const peers = peersSettings(ocSession)
+        return {
+          model: modelId,
+          systemPrompt: BASE_SETTINGS.systemPrompt,
+          settingSources: userSettings.settingSources ?? BASE_SETTINGS.settingSources,
+          permissionMode: BASE_SETTINGS.permissionMode,
+          cwd: cwd ?? os.tmpdir(),
+          env: c.env ?? userSettings.env ?? process.env,
+          ...(peers.mcpServers ? { mcpServers: peers.mcpServers } : {}),
+          ...(disallowedTools.length ? { disallowedTools } : {}),
+        }
+      }
+      let text
+      try {
+        const own = userSettings.disallowedTools ?? []
+        const [all, usage] = await Promise.all([listClaudeTools(sdk(own)), contextUsage(sdk(disabledTools(cfg.tools, own))).catch(() => undefined)])
+        text = toolsReport({ all, sources: toolSources(options, cwd), usage, language: cfg.language, alsoDisallowed: own })
+      } catch (e) {
+        log(`cc-tools failed ${ocSession}: ${e}`)
+        text = `/cc-tools: ${String(e?.message ?? e).slice(0, 300)}`
+      }
+      return kind === "generate" ? textResult(text) : textStream(text)
+    }
+
     const call = async (kind, callOptions) => {
       const ocSession = sessionIdOf(callOptions)
       // Diagnostics, off by default: CLAUDE_CODE_PROVIDER_PROBE=<file> records what OpenCode sends (the window's
@@ -169,6 +201,7 @@ export function createClaudeCode(options = {}) {
       const check = options.watchOpenCode === false ? undefined : (watchOpenCode(openCodeVersion(callOptions.headers), { log }) ?? readCheckState())
       // OpenCode's compaction: Claude Code's own /compact in the window's session instead.
       if (isCompactionRequest(callOptions.prompt)) return compact(kind, callOptions, ocSession)
+      if (isToolsCommand(callOptions.prompt)) return toolsCommand(kind, callOptions, ocSession)
       // Helper request (title, summary, ...): a plain model call, never a turn of the window's session.
       if (isHelperRequest(callOptions)) {
         const helper = createBase({

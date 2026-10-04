@@ -20,6 +20,13 @@ const en = {
   compactNothing: "/compact: nothing to compact yet — this window has no Claude Code session yet.",
   compactFailed: (why) => `/compact: Claude Code did not compact (${why}). The window continues as it was.`,
   important: "Important Context",
+  on: "on", off: "off", notOffered: "not offered here",
+  layer: { default: "provider default", machine: "opencode.jsonc", project: "project file", claude: "Claude Code" },
+  toolsTitle: "Claude Code tools in this window",
+  toolsSummary: (on, off, file) => `${on} on, ${off} off. Project file: ${file ?? "none"}.`,
+  tool: "Tool", status: "Status", decidedBy: "Decided by",
+  contextNow: "Context now (estimate)", total: "total",
+  toolsHow: 'Change: "tools": { "Name": false } (off) or true (on) -- in the provider settings of opencode.jsonc (whole machine) or in .opencode/opencode-claude-code-provider.json of the project. Every change of the tool set rewrites the prompt cache once.',
 }
 
 const ru = {
@@ -37,6 +44,13 @@ const ru = {
   compactNothing: "/compact: сжимать пока нечего — у окна ещё нет сессии Claude Code.",
   compactFailed: (why) => `/compact: Claude Code не сжал память (${why}). Окно продолжает как было.`,
   important: "Important Context",
+  on: "вкл", off: "выкл", notOffered: "здесь не предлагается",
+  layer: { default: "умолчание провайдера", machine: "opencode.jsonc", project: "файл проекта", claude: "Claude Code" },
+  toolsTitle: "Инструменты Claude Code в этом окне",
+  toolsSummary: (on, off, file) => `Включено ${on}, выключено ${off}. Файл проекта: ${file ?? "нет"}.`,
+  tool: "Инструмент", status: "Статус", decidedBy: "Кто решил",
+  contextNow: "Контекст сейчас (оценка)", total: "всего",
+  toolsHow: 'Изменить: "tools": { "Имя": false } (выкл) или true (вкл) — в настройках провайдера в opencode.jsonc (вся машина) или в .opencode/opencode-claude-code-provider.json проекта. Каждая смена набора инструментов один раз заново записывает кэш промпта.',
 }
 
 export const texts = (language) => (String(language ?? "en").toLowerCase().startsWith("ru") ? ru : en)

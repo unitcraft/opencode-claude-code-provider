@@ -98,8 +98,16 @@ Three layers, each over the previous one (`settings.js`):
    that are useless in an OpenCode window switched off (claude.ai artifacts, agent teams,
    scheduling/cloud, code review: ~12k tokens of every turn).
 2. **The machine**: the provider `settings` in `opencode.jsonc`.
-3. **The project**: `.opencode/claude-code.json` in the repository, searched upward from the
+3. **The project**: `.opencode/opencode-claude-code-provider.json` in the repository, searched upward from the
    window's directory (the same way opencode-peers finds `.opencode/nova-peers.json`).
+
+**What is on in a window**: type `/cc-tools` as the whole message. The provider answers itself, no
+model call: every tool Claude Code offers there (built-in and MCP), on or off, and which layer
+decided (provider default, `opencode.jsonc`, project file, Claude Code), plus the context estimate.
+It reads Claude Code's own tool list from the start of a turn it interrupts before the model is
+asked (measured: 0 tokens). Switching tools per message is not offered: tool definitions come
+first in the prompt, so every change of the set rewrites the whole history into the prompt cache
+-- twice (on and back off); a project file changes it once.
 
 Objects merge key by key (a project can switch one tool back on); `autoCompactWindow` as a single
 number means every model and replaces the per-model values. A broken project file is ignored and
@@ -117,7 +125,7 @@ logged.
 ```
 
 ```jsonc
-// <repository>/.opencode/claude-code.json -- this project only
+// <repository>/.opencode/opencode-claude-code-provider.json -- this project only
 { "autoCompactWindow": { "haiku": 120000 }, "tools": { "Workflow": true } }
 ```
 

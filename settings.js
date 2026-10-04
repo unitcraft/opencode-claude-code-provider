@@ -1,14 +1,15 @@
 // The provider's settings in three layers, each one over the previous:
 //   1. DEFAULTS below (what an OpenCode window on Claude Code needs out of the box);
 //   2. the provider `settings` in opencode.jsonc (the whole machine);
-//   3. the window's project: `.opencode/claude-code.json`, searched upward from the window's directory
-//      (like `.opencode/nova-peers.json` of opencode-peers), so a repository carries its own settings.
+//   3. the window's project: `.opencode/opencode-claude-code-provider.json`, searched upward from the window's directory
+//      (like `.opencode/opencode-peers.json` of opencode-peers; the file is named after the package), so a
+//      repository carries its own settings.
 // Object settings merge key by key (a project can switch one tool back on: `"tools": { "WebSearch": true }`),
 // anything else is replaced. autoCompactWindow: a number means every model ({"*": n}) and replaces the set.
 import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"
 
-export const PROJECT_FILE = path.join(".opencode", "claude-code.json")
+export const PROJECT_FILE = path.join(".opencode", "opencode-claude-code-provider.json")
 
 export const DEFAULTS = Object.freeze({
   language: "en",
@@ -44,7 +45,7 @@ export function mergeSettings(...layers) {
   return out
 }
 
-/** The project's `.opencode/claude-code.json` nearest to `dir` (upward), or undefined. Broken JSON -> error. */
+/** The project's `.opencode/opencode-claude-code-provider.json` nearest to `dir` (upward), or undefined. Broken JSON -> error. */
 export function findProjectSettings(dir) {
   let d = dir ? path.resolve(dir) : ""
   for (let i = 0; d && i < 32; i++) {
@@ -68,4 +69,14 @@ export function settingsFor(options, dir, log = () => {}) {
   const project = dir ? findProjectSettings(dir) : undefined
   if (project?.error) log(`project settings ignored: ${project.file}: ${project.error}`)
   return mergeSettings(DEFAULTS, options, project?.settings)
+}
+
+/** For every tool a layer mentions: on/off and the layer that decided it ("default" | "machine" | "project"). */
+export function toolSources(options, dir) {
+  const project = dir ? findProjectSettings(dir) : undefined
+  const out = {}
+  for (const [by, layer] of [["default", DEFAULTS], ["machine", options], ["project", project?.settings]]) {
+    for (const [name, on] of Object.entries(layer?.tools ?? {})) if (typeof on === "boolean") out[name] = { on, by }
+  }
+  return { tools: out, projectFile: project?.file }
 }
