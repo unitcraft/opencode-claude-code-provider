@@ -1,0 +1,78 @@
+// Helpers: OpenCode data directory, session -> directory lookup, session map persistence.
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs"
+import os from "node:os"
+import path from "node:path"
+
+/** OpenCode's data directory (XDG_DATA_HOME/opencode, default ~/.local/share/opencode). */
+export function opencodeDataDir(env = process.env) {
+  const base = env.XDG_DATA_HOME || path.join(os.homedir(), ".local", "share")
+  return path.join(base, "opencode")
+}
+
+let openDb
+async function sqliteOpen(file) {
+  if (!openDb) {
+    try {
+      const { Database } = await import("bun:sqlite") // OpenCode runs on Bun
+      openDb = (f) => {
+        const db = new Database(f, { readonly: true })
+        return { get: (sql, arg) => db.query(sql).get(arg), close: () => db.close() }
+      }
+    } catch {
+      const { DatabaseSync } = await import("node:sqlite") // tests under Node
+      openDb = (f) => {
+        const db = new DatabaseSync(f, { readOnly: true })
+        return { get: (sql, arg) => db.prepare(sql).get(arg), close: () => db.close() }
+      }
+    }
+  }
+  return openDb(file)
+}
+
+/**
+ * Directory of an OpenCode session, read-only from opencode.db (session_v2, then the
+ * legacy session table). Undefined when the session or the database is not found.
+ */
+export async function sessionDirectory(sessionId, dataDir = opencodeDataDir()) {
+  const file = path.join(dataDir, "opencode.db")
+  if (!sessionId || !existsSync(file)) return undefined
+  let db
+  try {
+    db = await sqliteOpen(file)
+    for (const table of ["session_v2", "session"]) {
+      try {
+        const row = db.get(`select directory from ${table} where id = ?`, sessionId)
+        if (row?.directory && existsSync(row.directory)) return row.directory
+      } catch {
+        // table missing in this OpenCode version
+      }
+    }
+    return undefined
+  } finally {
+    db?.close()
+  }
+}
+
+/** OpenCode session id -> Claude Code session id, kept across restarts. */
+export function sessionMapFile(dataDir = opencodeDataDir()) {
+  return path.join(dataDir, "claude-code-sessions.json")
+}
+
+export function loadSessionMap(file = sessionMapFile()) {
+  try {
+    return JSON.parse(readFileSync(file, "utf8"))
+  } catch {
+    return {}
+  }
+}
+
+export function saveSessionMap(map, file = sessionMapFile()) {
+  try {
+    mkdirSync(path.dirname(file), { recursive: true })
+    const tmp = `${file}.${process.pid}.tmp`
+    writeFileSync(tmp, JSON.stringify(map, null, 1))
+    renameSync(tmp, file)
+  } catch {
+    // losing the map only costs a fresh Claude Code session on the next turn
+  }
+}

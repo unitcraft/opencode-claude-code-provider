@@ -1,0 +1,16 @@
+{
+  "name": "opencode-claude-code-provider",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OpenCode provider that runs the official Claude Code (Claude Agent SDK) in the session's directory",
+  "license": "MIT",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --test test/lib.test.js"
+  },
+  "dependencies": {
+    "ai-sdk-provider-claude-code": "3.6.1",
+    "zod": "^4.1.8"
+  }
+}
