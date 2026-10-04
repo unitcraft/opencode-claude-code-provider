@@ -16,21 +16,21 @@ export function isToolsCommand(prompt) {
   return text.trim().replace(/^"|"$/g, "").trim().toLowerCase() === TOOLS_COMMAND
 }
 
-/** The tool names Claude Code offers with `options` (an interrupted turn: no model request). */
-export async function listClaudeTools(options) {
+/** The tools and skills Claude Code offers with `options` (an interrupted turn: no model request). */
+export async function discoverClaude(options) {
   const q = query({ prompt: "List.", options: { ...options, persistSession: false, maxTurns: 1 } })
   try {
     for await (const m of q) {
       if (m.type === "system" && m.subtype === "init") {
         await q.interrupt().catch(() => {})
-        return m.tools
+        return { tools: m.tools ?? [], skills: m.skills ?? [] }
       }
       if (m.type === "assistant" || m.type === "result") break
     }
   } finally {
     q.close?.()
   }
-  return []
+  return { tools: [], skills: [] }
 }
 
 /** Context usage of what is on now (local estimate, no model call). */
@@ -52,22 +52,29 @@ export async function contextUsage(options) {
  * The report: `all` -- tool names with nothing of the provider switched off; `sources` -- toolSources();
  * `usage` -- contextUsage() with the window's real settings.
  */
-export function toolsReport({ all, sources, usage, language, alsoDisallowed = [] }) {
-  const t = texts(language)
-  const rows = []
-  const names = [...new Set([...all, ...Object.keys(sources.tools)])]
-  const builtin = names.filter((n) => !n.startsWith("mcp__")).sort()
+/** Rows of one switch table: every name, on/off, the deciding layer. */
+function switchRows(all, decided, t, alsoOff = []) {
+  const names = [...new Set([...all, ...Object.keys(decided)])]
+  const plain = names.filter((n) => !n.startsWith("mcp__")).sort()
   const mcp = names.filter((n) => n.startsWith("mcp__")).sort()
-  for (const name of [...builtin, ...mcp]) {
-    const s = sources.tools[name]
-    const off = (s && !s.on) || alsoDisallowed.includes(name)
-    const by = alsoDisallowed.includes(name) ? "disallowedTools" : s ? t.layer[s.by] : t.layer.claude
+  return [...plain, ...mcp].map((name) => {
+    const s = decided[name]
+    const off = (s && !s.on) || alsoOff.includes(name)
+    const by = alsoOff.includes(name) ? "disallowedTools" : s ? t.layer[s.by] : t.layer.claude
     const unknown = !all.includes(name) && !off ? ` (${t.notOffered})` : ""
-    rows.push(`| ${name} | ${off ? t.off : t.on}${unknown} | ${by} |`)
-  }
+    return { on: !off, row: `| ${name} | ${off ? t.off : t.on}${unknown} | ${by} |` }
+  })
+}
+
+export function toolsReport({ all, sources, usage, language, alsoDisallowed = [], skills }) {
+  const t = texts(language)
+  const toolRows = switchRows(all, sources.tools, t, alsoDisallowed)
+  const rows = toolRows.map((r) => r.row)
+  const skillRows = skills ? switchRows(skills.all, skills.sources.skills, t) : []
   const cats = (usage?.categories ?? []).filter((c) => /tool|prompt|skill|memory|mcp/i.test(c.name))
   const k = (n) => `${(n / 1000).toFixed(1)}k`
-  const onCount = rows.filter((r) => r.includes(`| ${t.on}`)).length
+  const onCount = toolRows.filter((r) => r.on).length
+  const skillsOn = skillRows.filter((r) => r.on).length
   return [
     `## ${t.toolsTitle}`,
     "",
@@ -76,6 +83,9 @@ export function toolsReport({ all, sources, usage, language, alsoDisallowed = []
     `| ${t.tool} | ${t.status} | ${t.decidedBy} |`,
     "|---|---|---|",
     ...rows,
+    ...(skills
+      ? ["", `## ${t.skillsTitle}`, "", t.onOff(skillsOn, skillRows.length - skillsOn), "", `| ${t.skill} | ${t.status} | ${t.decidedBy} |`, "|---|---|---|", ...skillRows.map((r) => r.row)]
+      : []),
     ...(cats.length ? ["", `${t.contextNow}: ${cats.map((c) => `${c.name} ${k(c.tokens)}`).join(", ")}${usage.totalTokens ? ` — ${t.total} ${k(usage.totalTokens)}` : ""}.`] : []),
     "",
     t.toolsHow,

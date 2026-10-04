@@ -217,3 +217,33 @@ export function disabledTools(tools, alreadyDisallowed = []) {
   const off = Object.entries(tools ?? {}).filter(([, on]) => on === false).map(([name]) => name)
   return [...new Set([...alreadyDisallowed, ...off])]
 }
+
+/** The skills to load: every discovered skill except those set to false; undefined = no filter (load all). */
+export function enabledSkills(discovered, skills) {
+  const off = new Set(Object.entries(skills ?? {}).filter(([, on]) => on === false).map(([name]) => name))
+  if (!off.size || !discovered?.length) return undefined
+  return discovered.filter((name) => !off.has(name))
+}
+
+/** Local time HH:MM. */
+export const hhmm = (d = new Date()) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`
+
+/** What the model is told when the provider stamps the time (constant: the system prompt stays cache-stable). */
+export const TIME_HINT =
+  "The local time (HH:MM) at the start of each of your text messages is stamped by the OpenCode provider itself: do not write the time yourself and do not run date / Get-Date for it."
+
+/**
+ * Stamps "HH:MM" before the first piece of every text block the model streams (not the provider's own
+ * notes). Returns a function part -> part.
+ */
+export function timeStamper(now = () => new Date()) {
+  const fresh = new Set()
+  return (part) => {
+    if (part.type === "text-start" && !String(part.id).startsWith("provider-note-")) fresh.add(part.id)
+    if (part.type === "text-delta" && fresh.has(part.id) && part.delta) {
+      fresh.delete(part.id)
+      return { ...part, delta: hhmm(now()) + String.fromCharCode(10, 10) + part.delta }
+    }
+    return part
+  }
+}

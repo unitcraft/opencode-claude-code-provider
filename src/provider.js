@@ -17,7 +17,10 @@
 //     check notifies (Windows notification, a warning in each window once, the log);
 //   * settings in three layers: built-in defaults, the provider options, the project's
 //     .opencode/opencode-claude-code-provider.json (settings.js);
-//   * `/cc-tools` typed in a window lists every Claude Code tool there and whether it is on (no model call);
+//   * `/cc-tools` typed in a window lists every Claude Code tool and skill there and whether it is on (no model call);
+//   * skills switched off are left out of the session (Claude Code takes an allowlist: the provider learns the
+//     full list once per directory from an interrupted turn, 0 tokens);
+//   * timeStamp: the provider stamps HH:MM before each answer text and tells the model not to write the time;
 //   * letters between OpenCode windows: OpenCode's tool list is dropped, so the opencode-peers tools
 //     (peer_list, peer_send, ...) come to Claude Code as the MCP server `peers`, acting for the
 //     requesting OpenCode session.
@@ -29,10 +32,10 @@ import { appendFileSync } from "node:fs"
 import path from "node:path"
 import { noteChannel, compactionWatch } from "./notes.js"
 import { texts, compactionAnswer } from "./texts.js"
-import { settingsFor, toolSources } from "./settings.js"
-import { isToolsCommand, listClaudeTools, contextUsage, toolsReport } from "./tools-report.js"
+import { settingsFor, toolSources, switchSources } from "./settings.js"
+import { isToolsCommand, discoverClaude, contextUsage, toolsReport } from "./tools-report.js"
 import { watchOpenCode, openCodeVersion, installedOpenCodeVersion, readCheckState, toast, CHECK_WARNING } from "./opencode-check.js"
-import { sessionDirectory, loadSessionMap, saveSessionMap, resolvePeersMcp, peersMcpServer, isHelperRequest, helperSettings, isCompactionRequest, autoCompactWindowFor, disabledTools, rawUserTurn, textResult, textStream } from "./lib.js"
+import { sessionDirectory, loadSessionMap, saveSessionMap, resolvePeersMcp, peersMcpServer, isHelperRequest, helperSettings, isCompactionRequest, autoCompactWindowFor, disabledTools, enabledSkills, TIME_HINT, timeStamper, hhmm, rawUserTurn, textResult, textStream } from "./lib.js"
 
 const BASE_SETTINGS = {
   systemPrompt: { type: "preset", preset: "claude_code" },
@@ -94,6 +97,7 @@ export function createClaudeCode(options = {}) {
   const warned = new Set() // `version:session:hour` -- a failed check is repeated in each window once an hour
   const contextWindows = new Map() // OpenCode session -> the model's window Claude Code reported last
   const modelNames = new Map() // OpenCode session -> the real model Claude Code ran (claude-haiku-4-5-...)
+  const skillLists = new Map() // directory -> every skill Claude Code discovers there
   // The OpenCode check runs at load too (no request needed) and reminds every hour while it fails.
   const hour = () => Math.floor(Date.now() / 3_600_000)
   if (options.watchOpenCode !== false) startWatch()
@@ -166,29 +170,47 @@ export function createClaudeCode(options = {}) {
       return answer(boundary ? t.compactDone({ seconds, pre: boundary.pre_tokens, post: boundary.post_tokens }) : t.compactFailed("Claude Code reported no compaction"))
     }
 
-    // `/cc-tools`: Claude Code's tools in this window and their status, without a model call.
+    // Agent SDK options of a window for the interrupted discovery turn and the context estimate.
+    const sdkOptions = (cfg, ocSession, cwd, disallowedTools) => {
+      const c = claudeSettings(modelId, cfg)
+      const peers = peersSettings(ocSession)
+      return {
+        model: modelId,
+        systemPrompt: BASE_SETTINGS.systemPrompt,
+        settingSources: userSettings.settingSources ?? BASE_SETTINGS.settingSources,
+        permissionMode: BASE_SETTINGS.permissionMode,
+        cwd: cwd ?? os.tmpdir(),
+        env: c.env ?? userSettings.env ?? process.env,
+        ...(peers.mcpServers ? { mcpServers: peers.mcpServers } : {}),
+        ...(disallowedTools.length ? { disallowedTools } : {}),
+      }
+    }
+    // The skills to load in a window: only needed when a skill is switched off. The full list (Claude Code
+    // takes an allowlist) is learned once per directory; /cc-tools refreshes it.
+    const skillsFor = async (cfg, ocSession, cwd) => {
+      if (!Object.values(cfg.skills ?? {}).some((on) => on === false)) return undefined
+      if (!skillLists.has(cwd)) {
+        try {
+          skillLists.set(cwd, (await discoverClaude(sdkOptions(cfg, ocSession, cwd, userSettings.disallowedTools ?? []))).skills)
+        } catch (e) {
+          log(`skills discovery failed ${cwd}: ${e}`)
+          return undefined // all skills rather than none
+        }
+      }
+      return enabledSkills(skillLists.get(cwd), cfg.skills)
+    }
+
+    // `/cc-tools`: Claude Code's tools and skills in this window and their status, without a model call.
     const toolsCommand = async (kind, callOptions, ocSession) => {
       const cwd = ocSession ? await sessionDirectory(ocSession) : undefined
       const cfg = settingsFor(options, cwd, log)
-      const sdk = (disallowedTools) => {
-        const c = claudeSettings(modelId, cfg)
-        const peers = peersSettings(ocSession)
-        return {
-          model: modelId,
-          systemPrompt: BASE_SETTINGS.systemPrompt,
-          settingSources: userSettings.settingSources ?? BASE_SETTINGS.settingSources,
-          permissionMode: BASE_SETTINGS.permissionMode,
-          cwd: cwd ?? os.tmpdir(),
-          env: c.env ?? userSettings.env ?? process.env,
-          ...(peers.mcpServers ? { mcpServers: peers.mcpServers } : {}),
-          ...(disallowedTools.length ? { disallowedTools } : {}),
-        }
-      }
+      const sdk = (disallowedTools) => sdkOptions(cfg, ocSession, cwd, disallowedTools)
       let text
       try {
         const own = userSettings.disallowedTools ?? []
-        const [all, usage] = await Promise.all([listClaudeTools(sdk(own)), contextUsage(sdk(disabledTools(cfg.tools, own))).catch(() => undefined)])
-        text = toolsReport({ all, sources: toolSources(options, cwd), usage, language: cfg.language, alsoDisallowed: own })
+        const [found, usage] = await Promise.all([discoverClaude(sdk(own)), contextUsage(sdk(disabledTools(cfg.tools, own))).catch(() => undefined)])
+        if (cwd && found.skills.length) skillLists.set(cwd, found.skills)
+        text = toolsReport({ all: found.tools, sources: toolSources(options, cwd), usage, language: cfg.language, alsoDisallowed: own, skills: { all: found.skills, sources: switchSources("skills", options, cwd) } })
       } catch (e) {
         log(`cc-tools failed ${ocSession}: ${e}`)
         text = `/cc-tools: ${String(e?.message ?? e).slice(0, 300)}`
@@ -230,8 +252,12 @@ export function createClaudeCode(options = {}) {
         notes.push(CHECK_WARNING(check, cfg.language))
       }
       const watch = compactionWatch(notes, { userHooks: userSettings.hooks, userOnSdkMessage: userSettings.onSdkMessage, language: cfg.language })
+      const skills = await skillsFor(cfg, ocSession, cwd)
+      // timeStamp: a constant line appended to Claude Code's system prompt (cache-stable); the stamp itself below
+      const timeHint = cfg.timeStamp ? { systemPrompt: { type: "preset", preset: "claude_code", append: TIME_HINT } } : {}
+      const stamp = cfg.timeStamp ? timeStamper() : (part) => part
       const inner = createBase({
-        defaultSettings: { ...BASE_SETTINGS, ...userSettings, ...claudeSettings(modelId, cfg), ...peersSettings(ocSession), hooks: watch.hooks, onSdkMessage: watch.onSdkMessage, cwd, ...(resume ? { resume } : {}) },
+        defaultSettings: { ...BASE_SETTINGS, ...userSettings, ...timeHint, ...claudeSettings(modelId, cfg), ...peersSettings(ocSession), ...(skills ? { skills } : {}), hooks: watch.hooks, onSdkMessage: watch.onSdkMessage, cwd, ...(resume ? { resume } : {}) },
       }).languageModel(modelId)
       // The user's text goes to Claude Code as typed (no "Human: " prefix of the package).
       const prompt = rawUserTurn(resume ? lastUserTurn(callOptions.prompt) : callOptions.prompt.filter((m) => m.role !== "system"))
@@ -254,7 +280,10 @@ export function createClaudeCode(options = {}) {
         noteWindow(r.providerMetadata)
         watch.finish()
         const shown = notes.take().map((text) => ({ type: "text", text: `_${text}_\n\n` }))
-        return shown.length ? { ...r, content: [...shown, ...r.content] } : r
+        // timeStamp: HH:MM before the first answer text
+        const first = cfg.timeStamp ? r.content.findIndex((c) => c.type === "text" && c.text) : -1
+        const content = first < 0 ? r.content : r.content.map((c, i) => (i === first ? { ...c, text: `${hhmm()}\n\n${c.text}` } : c))
+        return shown.length || first >= 0 ? { ...r, content: [...shown, ...content] } : r
       }
       const r = await inner.doStream(opts)
       const stream = r.stream.pipeThrough(
@@ -269,7 +298,7 @@ export function createClaudeCode(options = {}) {
               watch.finish()
               notes.drain() // anything still waiting goes out before the end
             }
-            notes.pass(part)
+            notes.pass(stamp(part))
           },
         }),
       )

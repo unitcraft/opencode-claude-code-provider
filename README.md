@@ -101,6 +101,20 @@ Three layers, each over the previous one (`src/settings.js`):
 3. **The project**: `.opencode/opencode-claude-code-provider.json` in the repository, searched upward from the
    window's directory (the same way opencode-peers finds `.opencode/nova-peers.json`).
 
+**Skills**: `skills: { "name": false }`, like `tools`. Claude Code puts the listing of every skill into
+each session (measured in nova-opencode: 51 skills, ~33k characters). The defaults leave out the
+ones useless in an OpenCode window (Claude Code's own terminal UI, scheduling, claude.ai artifacts
+and documents); the repository's skills stay. Claude Code takes an allowlist, so the provider
+learns the full list once per directory from an interrupted turn (0 tokens) and passes "all but the
+switched-off". A new session gets the filtered listing; a running one keeps the listing it started
+with.
+
+**Time stamp**: `timeStamp: true` -- the provider puts `HH:MM` before each answer text and adds one
+constant line to Claude Code's system prompt telling the model not to write the time or run
+`date` for it (opencode-windows-env stamps OpenCode's own HTTP responses; claude-code windows have
+none, so without this Claude ran `date` on every message). Off by default. The system-prompt line
+reaches new sessions (Claude Code records a session's system prompt); the stamp works at once.
+
 **What is on in a window**: type `/cc-tools` as the whole message. The provider answers itself, no
 model call: every tool Claude Code offers there (built-in and MCP), on or off, and which layer
 decided (provider default, `opencode.jsonc`, project file, Claude Code), plus the context estimate.

@@ -26,8 +26,9 @@ const en = {
   toolsTitle: "Claude Code tools in this window",
   toolsSummary: (on, off, file) => `${on} on, ${off} off. Project file: ${file ?? "none"}.`,
   tool: "Tool", status: "Status", decidedBy: "Decided by",
+  skillsTitle: "Claude Code skills in this window", skill: "Skill", onOff: (on, off) => `${on} on, ${off} off.`,
   contextNow: "Context now (estimate)", total: "total",
-  toolsHow: 'Change: "tools": { "Name": false } (off) or true (on) -- in the provider settings of opencode.jsonc (whole machine) or in .opencode/opencode-claude-code-provider.json of the project. Every change of the tool set rewrites the prompt cache once.',
+  toolsHow: 'Change: "tools" / "skills": { "Name": false } (off) or true (on) -- in the provider settings of opencode.jsonc (whole machine) or in .opencode/opencode-claude-code-provider.json of the project. Every change of the tool set rewrites the prompt cache once.',
 }
 
 const ru = {
@@ -51,8 +52,9 @@ const ru = {
   toolsTitle: "Инструменты Claude Code в этом окне",
   toolsSummary: (on, off, file) => `Включено ${on}, выключено ${off}. Файл проекта: ${file ?? "нет"}.`,
   tool: "Инструмент", status: "Статус", decidedBy: "Кто решил",
+  skillsTitle: "Навыки Claude Code в этом окне", skill: "Навык", onOff: (on, off) => `Включено ${on}, выключено ${off}.`,
   contextNow: "Контекст сейчас (оценка)", total: "всего",
-  toolsHow: 'Изменить: "tools": { "Имя": false } (выкл) или true (вкл) — в настройках провайдера в opencode.jsonc (вся машина) или в .opencode/opencode-claude-code-provider.json проекта. Каждая смена набора инструментов один раз заново записывает кэш промпта.',
+  toolsHow: 'Изменить: "tools" / "skills": { "Имя": false } (выкл) или true (вкл) — в настройках провайдера в opencode.jsonc (вся машина) или в .opencode/opencode-claude-code-provider.json проекта. Каждая смена набора инструментов один раз заново записывает кэш промпта.',
 }
 
 export const texts = (language) => (String(language ?? "en").toLowerCase().startsWith("ru") ? ru : en)

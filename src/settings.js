@@ -24,9 +24,21 @@ export const DEFAULTS = Object.freeze({
     CronCreate: false, CronDelete: false, CronList: false, ScheduleWakeup: false, RemoteTrigger: false, PushNotification: false, // scheduling, cloud
     ReportFindings: false, // code review
   },
+  // Skills (Claude Code's skill listing goes into every session, measured 2026-10-05: 51 skills, ~33k
+  // characters): the ones useless in an OpenCode window are left out. The repository's own skills stay.
+  skills: {
+    "keybindings-help": false, "fewer-permission-prompts": false, // Claude Code's own terminal UI
+    loop: false, schedule: false, "workflow-authoring": false, dataviz: false, // cloud/scheduling, Workflow (off), charts
+    "artifact-design": false, "artifact-diagramming": false, "artifact-capabilities": false, // claude.ai artifacts (the Artifact tool is off)
+    "anthropic-skills:docs": false, "anthropic-skills:docx": false, "anthropic-skills:google-workspace": false,
+    "anthropic-skills:import-memory": false, "anthropic-skills:morning": false, "anthropic-skills:pdf": false,
+    "anthropic-skills:pptx": false, "anthropic-skills:skill-creator": false, "anthropic-skills:xlsx": false, // claude.ai documents
+  },
+  // The provider stamps HH:MM at the start of each answer text and tells the model so (no `date` calls).
+  timeStamp: false,
 })
 
-const KEYS = ["language", "autoCompactWindow", "tools"]
+const KEYS = ["language", "autoCompactWindow", "tools", "skills", "timeStamp"]
 const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v)
 const normalize = (key, v) => (key === "autoCompactWindow" && typeof v === "number" ? { "*": v } : v)
 
@@ -72,12 +84,13 @@ export function settingsFor(options, dir, log = () => {}) {
   return mergeSettings(DEFAULTS, options, project?.settings)
 }
 
-/** For every tool a layer mentions: on/off and the layer that decided it ("default" | "machine" | "project"). */
-export function toolSources(options, dir) {
+/** For every tool (key "tools") or skill (key "skills") a layer mentions: on/off and the deciding layer. */
+export function switchSources(key, options, dir) {
   const project = dir ? findProjectSettings(dir) : undefined
   const out = {}
   for (const [by, layer] of [["default", DEFAULTS], ["machine", options], ["project", project?.settings]]) {
-    for (const [name, on] of Object.entries(layer?.tools ?? {})) if (typeof on === "boolean") out[name] = { on, by }
+    for (const [name, on] of Object.entries(layer?.[key] ?? {})) if (typeof on === "boolean") out[name] = { on, by }
   }
-  return { tools: out, projectFile: project?.file }
+  return { [key]: out, tools: key === "tools" ? out : undefined, projectFile: project?.file }
 }
+export const toolSources = (options, dir) => switchSources("tools", options, dir)
