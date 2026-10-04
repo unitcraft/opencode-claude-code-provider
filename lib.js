@@ -140,8 +140,8 @@ export function helperSettings(prompt) {
  * its session) whose last user message asks for a summary in OpenCode's template. Measured 2026-10-04: on
  * claude-code it became a full Claude Code turn (Haiku: $0.03, 137k cached tokens read), the summary was
  * APPENDED to Claude Code's own session, and the next turn resumed that full session anyway -- OpenCode's
- * compaction cannot shrink what Claude Code sees, it only spends a turn. Claude Code compacts its own
- * session itself. Markers: OpenCode's two fixed openings and the template's first heading.
+ * compaction cannot shrink what Claude Code sees, it only spends a turn. So the provider runs Claude Code's
+ * own /compact instead (index.js). Markers: OpenCode's two fixed openings and the template's first heading.
  */
 export const COMPACTION_OPENINGS = [
   "You MUST summarize the conversation above into a structured summary",
@@ -156,25 +156,6 @@ export function isCompactionRequest(prompt) {
 }
 
 /** The summary OpenCode stores instead of a Claude Code turn (OpenCode checks the template headings). */
-/**
- * The answer to OpenCode's compaction (/compact): what the window shows instead of a summary. The heading
- * "## Objective" is from OpenCode's template -- OpenCode accepts a summary only with one of its headings.
- * `threshold`: the configured autoCompactWindow for this model (undefined = Claude Code's auto);
- * `contextWindow`: the model's window as Claude Code reported it on this window's last turn, if known.
- */
-export function compactionSummary({ model, threshold, contextWindow } = {}) {
-  const k = (n) => `${Math.round(n / 1000)} тыс. токенов`
-  const window = contextWindow ? `окно модели ${model ?? ""} — ${k(contextWindow)}`.replace("  ", " ") : `окно модели ${model ?? ""}`.trim()
-  const limit = threshold
-    ? `когда память дорастёт до ~${k(Math.min(Math.max(threshold, 100_000), contextWindow ?? Infinity))} (настройка autoCompactWindow провайдера; ${window})`
-    : `когда память подойдёт к пределу, который Claude Code выбирает сам (${window}; свой порог — настройка autoCompactWindow провайдера)`
-  return `## Objective
-- /compact здесь не нужен: это окно на провайдере claude-code. Память окна ведёт Claude Code и сжимает её сам — ${limit}. Начало и конец такого сжатия видны в окне строками «⏳ … сжимает контекст» и «✓ Контекст сжат».
-
-## Important Context
-- Сжатие OpenCode пропущено, ход Claude не потрачен; модель продолжает из своей сессии Claude Code.`
-}
-export const COMPACTION_SUMMARY = compactionSummary()
 
 /** autoCompactWindow of the provider options for a model: a number for every model, or { opus: n, sonnet: n, ... }. */
 export function autoCompactWindowFor(option, modelId) {
@@ -228,4 +209,10 @@ export function textStream(text) {
       },
     }),
   }
+}
+
+/** Built-in Claude Code tools switched off: `tools: { "Artifact": false, ... }` of the provider options. */
+export function disabledTools(tools, alreadyDisallowed = []) {
+  const off = Object.entries(tools ?? {}).filter(([, on]) => on === false).map(([name]) => name)
+  return [...new Set([...alreadyDisallowed, ...off])]
 }

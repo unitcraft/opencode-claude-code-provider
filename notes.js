@@ -6,9 +6,7 @@
 // process). A note never splits a text block the model is streaming: while one is open, notes wait for
 // its end.
 
-export const COMPACT_STARTED = (trigger) =>
-  trigger === "auto" ? "⏳ Claude Code сжимает контекст (автоматически, память окна заполнилась)…" : "⏳ Claude Code сжимает контекст…"
-export const COMPACT_ENDED = (seconds) => `✓ Контекст сжат за ${seconds} с.`
+import { texts } from "./texts.js"
 
 export function noteChannel() {
   let ctl
@@ -57,15 +55,16 @@ export function noteChannel() {
 }
 
 /** SDK hooks that put compaction notes into `notes` (merged with the user's own hooks). */
-export function compactionHooks(notes, userHooks = {}) {
+export function compactionHooks(notes, userHooks = {}, language = "en") {
+  const t = texts(language)
   let started = 0
   const pre = async (input) => {
     started = Date.now()
-    notes.push(COMPACT_STARTED(input?.trigger))
+    notes.push(t.compactStarted(input?.trigger))
     return { continue: true }
   }
   const post = async () => {
-    notes.push(COMPACT_ENDED(Math.max(1, Math.round((Date.now() - (started || Date.now())) / 1000))))
+    notes.push(t.compactEnded(Math.max(1, Math.round((Date.now() - (started || Date.now())) / 1000))))
     return { continue: true }
   }
   return {

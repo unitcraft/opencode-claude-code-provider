@@ -31,12 +31,15 @@ Nothing is spoofed: Claude Code runs under your own Claude login, exactly as in 
   as a turn of the window's session. (Before 2026-10-04 it was a full turn: with `title` on
   `claude-code` the window's message was executed twice — a `peer_send` letter went out twice —
   and the title was the first line of that answer.) So `title` / `summary` may use `claude-code`.
-- **OpenCode's compaction is skipped** (auto or `/compact`). Claude Code keeps the whole
-  conversation in its own session and compacts it itself; OpenCode's compaction could not shrink
-  that, it only cost a full Claude turn and appended its summary to Claude Code's session
-  (measured 2026-10-04). The provider recognizes OpenCode's compaction request and answers it with
-  a short fixed note in OpenCode's format, without calling Claude. If OpenCode changes its
-  compaction wording, the request is no longer recognized and is a normal turn again.
+- **`/compact` compacts Claude Code's memory.** Claude Code keeps the whole conversation in its
+  own session; OpenCode's own compaction (a summary of OpenCode's history) could not shrink it --
+  measured 2026-10-04: it cost a full Claude turn and appended its summary to Claude Code's
+  session. The provider recognizes OpenCode's compaction request (auto or `/compact`) and runs
+  Claude Code's own `/compact` in the window's session instead (measured: 34 s with Haiku, the
+  next turn read ~26k tokens instead of ~40k, facts from the start remembered). OpenCode gets a
+  short answer in its template: how long it took and the auto-compaction threshold. A window
+  without a Claude Code session yet: "nothing to compact". If OpenCode changes its compaction
+  wording, the request is no longer recognized and is a normal turn again (see below).
 - **The user's text goes to Claude Code as typed.** The package prefixes every user message with
   `Human: ` (not configurable); a text-only message is passed as raw input instead, so Claude Code
   gets exactly the typed text and its own slash commands (e.g. `/flow` from `.claude/commands`)
@@ -44,8 +47,10 @@ Nothing is spoofed: Claude Code runs under your own Claude login, exactly as in 
 - **Auto-compaction threshold per model** (`autoCompactWindow`): Claude Code compacts its memory
   when it reaches this size; unset -> Claude Code's own choice (measured: the full window for
   1M models). Claude Code clamps it to 100k ... the model's window (a larger value = the window).
-  `/compact` in OpenCode answers with the threshold and the model's window instead of a summary.
-- **Built-in tools switched off** (`disabledTools`): they are removed from Claude Code's context.
+  The keys are the model names OpenCode sends (the keys of `models` in the provider config:
+  `opus`, `sonnet`, `haiku`) and match by family, so `opus` also covers `claude-opus-5-5` or
+  `opus[1m]`; Claude Code maps the aliases to the current models itself.
+- **Built-in tools switched off** (`tools: { "Name": false }`): removed from Claude Code's context.
   Measured 2026-10-04 (Haiku, empty folder): all 35 built-in tools ~27k tokens per turn of ~34k;
   without claude.ai artifacts, agent teams, scheduling and review tools (list below) 22k.
 - **Claude Code compacting its context is shown.** When Claude Code's own memory fills up it
@@ -91,11 +96,16 @@ cd D:/Sources/opencode-claude-code-provider && npm install
   "claudeConfigDir": "D:/Sources/.claude-accounts/nv-lang",
   // Claude Code compacts its memory at this size (tokens); per model family or one number
   "autoCompactWindow": { "opus": 400000, "sonnet": 400000, "haiku": 160000 },
-  // built-in Claude Code tools removed from the context (not usable from OpenCode windows anyway)
-  "disabledTools": ["Artifact", "ArtifactComments", "ArtifactData", "DesignSync",
-                    "Workflow", "ListAgents", "SendMessage",
-                    "CronCreate", "CronDelete", "CronList", "ScheduleWakeup", "RemoteTrigger",
-                    "PushNotification", "ReportFindings"],
+  // built-in Claude Code tools: false = removed from the context (useless in OpenCode windows)
+  "tools": {
+    "Artifact": false, "ArtifactComments": false, "ArtifactData": false, "DesignSync": false, // claude.ai artifacts
+    "Workflow": false, "ListAgents": false, "SendMessage": false,                           // agent teams (letters: peers)
+    "CronCreate": false, "CronDelete": false, "CronList": false, "ScheduleWakeup": false,
+    "RemoteTrigger": false, "PushNotification": false,                                     // scheduling, cloud
+    "ReportFindings": false                                                                 // code review
+  },
+  // the provider's own lines in windows (compaction notes, /compact answer, warnings): "en" or "ru"
+  "language": "en",
   "peersMcp": "D:/Sources/opencode-plugins/opencode-peers/mcp.ts" // default: the sibling checkout
 }
 ```
@@ -131,7 +141,8 @@ turn again. By hand: `npm run check-opencode`.
    (`tools`), and update `COMPACTION_OPENINGS` in `lib.js` (and the heading, if the template
    changed) or `isHelperRequest`; in `opencode-check.js` update the matching check.
 4. `npm test` (the shapes in `test/opencode-check.test.js` follow the new OpenCode), then repeat
-   step 2: compaction completed with cost 0 and no summary request in Claude Code's session; the
+   step 2: compaction completed ("Claude Code compacted ..."), Claude Code's session shows its own
+   `/compact` and no OpenCode summary request, the next turn reads fewer tokens; the
    title request does not repeat the window's message.
 5. Delete `claude-code-provider-check.json` so the provider checks again; commit.
 
@@ -140,7 +151,7 @@ turn again. By hand: `npm run check-opencode`.
 - Tools are Claude Code's, not OpenCode's: OpenCode plugins that act on OpenCode tool calls
   or inject into OpenCode's system prompt do not reach these windows.
 - Every turn carries Claude Code's own part (measured 2026-10-04, Haiku): system prompt ~7k,
-  built-in tools ~27k (~15k with the `disabledTools` above), peers MCP ~0.2k,
+  built-in tools ~27k (~15k with the `tools` above), peers MCP ~0.2k,
   account settings ~0.8k, plus the repository's CLAUDE.md with its imports (nova: ~12k,
   nova-opencode: ~8k). Written to the prompt cache once, then read from it each turn.
 - OpenCode plugins that add to OpenCode's system prompt (opencode-windows-env's time hint) or act on

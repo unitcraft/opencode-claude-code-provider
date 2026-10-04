@@ -1,7 +1,8 @@
 // node --test test/
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { COMPACT_ENDED, COMPACT_STARTED, compactionHooks, noteChannel } from "../notes.js"
+import { compactionHooks, noteChannel } from "../notes.js"
+import { texts } from "../texts.js"
 
 function collector() {
   const out = []
@@ -42,12 +43,13 @@ test("drain shows what still waits; take hands notes to doGenerate", () => {
 test("compaction hooks: started and finished notes, the user's own hooks kept", async () => {
   const notes = noteChannel()
   const mine = { hooks: [async () => ({ continue: true })] }
-  const hooks = compactionHooks(notes, { PreCompact: [mine], Stop: [mine] })
+  const hooks = compactionHooks(notes, { PreCompact: [mine], Stop: [mine] }, "ru")
   assert.equal(hooks.PreCompact[0], mine)
   assert.equal(hooks.Stop[0], mine)
   assert.deepEqual(await hooks.PreCompact[1].hooks[0]({ trigger: "auto" }), { continue: true })
   await hooks.PostCompact[0].hooks[0]({ trigger: "auto" })
   const shown = notes.take()
-  assert.equal(shown[0], COMPACT_STARTED("auto"))
-  assert.equal(shown[1], COMPACT_ENDED(1))
+  assert.equal(shown[0], texts("ru").compactStarted("auto"))
+  assert.equal(shown[1], texts("ru").compactEnded(1))
+  assert.match(texts().compactEnded(3), /^✓ Context compacted in 3 s\.$/) // English by default
 })

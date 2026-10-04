@@ -5,7 +5,8 @@ import os from "node:os"
 import path from "node:path"
 import { DatabaseSync } from "node:sqlite"
 import { test } from "node:test"
-import { COMPACTION_SUMMARY, autoCompactWindowFor, compactionSummary, helperSettings, rawUserTurn, isCompactionRequest, isHelperRequest, loadSessionMap, peersMcpServer, resolvePeersMcp, saveSessionMap, sessionDirectory } from "../lib.js"
+import { compactionAnswer, texts } from "../texts.js"
+import { autoCompactWindowFor, disabledTools, helperSettings, rawUserTurn, isCompactionRequest, isHelperRequest, loadSessionMap, peersMcpServer, resolvePeersMcp, saveSessionMap, sessionDirectory } from "../lib.js"
 
 function fakeOpencode() {
   const data = mkdtempSync(path.join(os.tmpdir(), "occ-"))
@@ -99,33 +100,42 @@ test("OpenCode's compaction request is recognized, both openings; ordinary turns
   assert.equal(isCompactionRequest([{ role: "user", content: "/compact" }]), false)
   // only the LAST user message counts: a compaction ask earlier in the history is not a compaction now
   assert.equal(isCompactionRequest([...compactionAsk("You MUST summarize the conversation above into a structured summary"), { role: "assistant", content: [] }, { role: "user", content: [{ type: "text", text: "next task" }] }]), false)
-  assert.match(COMPACTION_SUMMARY, /^## Objective$/m) // OpenCode accepts a summary only with its template headings
+  assert.match(compactionAnswer("en", "x"), /^## Objective$/m) // OpenCode accepts a summary only with its template headings
 })
 
-test("the provider answers compaction itself: no Claude Code run, no session lookup", async () => {
+test("/compact of a window without a Claude Code session: answered at once, nothing to compact", async () => {
   const { createClaudeCode } = await import("../index.js")
   const model = createClaudeCode({ peersMcp: false, watchOpenCode: false, autoCompactWindow: { haiku: 150000 } }).languageModel("haiku")
   const tools = [{ type: "function", name: "bash", inputSchema: { type: "object" } }]
   // no session header: a real run would be refused ("cannot resolve the directory"), so an answer proves no run
   const g = await model.doGenerate({ prompt: compactionAsk("You MUST summarize the conversation above into a structured summary"), tools, headers: {} })
-  assert.equal(g.content[0].text, compactionSummary({ model: "haiku", threshold: 150000 }))
-  assert.match(g.content[0].text, /~150 тыс\. токенов/)
+  const expected = compactionAnswer("en", texts("en").compactNothing, { model: "haiku", threshold: 150000 })
+  assert.equal(g.content[0].text, expected)
+  assert.match(g.content[0].text, /nothing to compact yet.*~150k tokens/s)
   assert.equal(g.usage.inputTokens.total, 0)
   const s = await model.doStream({ prompt: compactionAsk("Update the existing checkpoint in the conversation above into one consolidated summary"), tools, headers: {} })
   const parts = []
   for await (const p of s.stream) parts.push(p)
   assert.deepEqual(parts.map((p) => p.type), ["stream-start", "text-start", "text-delta", "text-end", "finish"])
-  assert.equal(parts[2].delta, compactionSummary({ model: "haiku", threshold: 150000 }))
+  assert.equal(parts[2].delta, expected)
   // an ordinary turn still goes to Claude Code (here refused: no session)
   await assert.rejects(model.doGenerate({ prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }], tools, headers: {} }), /cannot resolve the directory/)
 })
 
-test("/compact answer names the threshold: configured (clamped as Claude Code does) or Claude Code's own", () => {
-  assert.match(compactionSummary({ model: "opus", threshold: 400000, contextWindow: 1000000 }), /~400 тыс\. токенов .*окно модели opus — 1000 тыс\. токенов/)
-  assert.match(compactionSummary({ model: "haiku", threshold: 500000, contextWindow: 200000 }), /~200 тыс\. токенов/) // above the window -> the window
-  assert.match(compactionSummary({ model: "haiku", threshold: 50000 }), /~100 тыс\. токенов/) // below Claude Code's minimum 100k
-  assert.match(compactionSummary({ model: "sonnet" }), /который Claude Code выбирает сам/)
-  assert.match(COMPACTION_SUMMARY, /^## Objective$/m)
+test("/compact answer names the threshold: configured (clamped as Claude Code does) or Claude Code's own; en default, ru", () => {
+  const en = texts().threshold
+  assert.match(en({ model: "claude-opus-5-5", threshold: 400000, contextWindow: 1000000 }), /~400k tokens .*claude-opus-5-5 window 1000k tokens/)
+  assert.match(en({ model: "haiku", threshold: 500000, contextWindow: 200000 }), /~200k tokens/) // above the window -> the window
+  assert.match(en({ model: "haiku", threshold: 50000 }), /~100k tokens/) // below Claude Code's minimum 100k
+  assert.match(en({ model: "sonnet" }), /a limit it picks itself/)
+  assert.match(texts("ru").threshold({ model: "opus", threshold: 400000, contextWindow: 1000000 }), /~400 тыс\. токенов/)
+  assert.match(compactionAnswer("ru", texts("ru").compactDone({ seconds: 19 })), /^## Objective\n- \/compact: Claude Code сжал память окна за 19 с\./)
+})
+
+test("tools: { Name: false } switches built-in tools off (true or absent keeps them)", () => {
+  assert.deepEqual(disabledTools({ Artifact: false, Bash: true, Workflow: false }), ["Artifact", "Workflow"])
+  assert.deepEqual(disabledTools({ Artifact: false }, ["Artifact", "X"]), ["Artifact", "X"])
+  assert.deepEqual(disabledTools(undefined), [])
 })
 
 test("autoCompactWindow: one number for all models, or per model family", () => {

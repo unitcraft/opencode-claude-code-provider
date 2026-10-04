@@ -13,6 +13,7 @@ import { readFile } from "node:fs/promises"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { COMPACTION_OPENINGS, opencodeDataDir } from "./lib.js"
+import { texts } from "./texts.js"
 
 /** Check OpenCode's program text. `problems` empty -> the provider's rules still match. */
 export function checkOpenCodeProgram(text) {
@@ -128,6 +129,5 @@ export function watchOpenCode(version, { dataDir = opencodeDataDir(), file = fin
   return undefined
 }
 
-/** The warning a window shows once when the check for this OpenCode version failed. */
-export const CHECK_WARNING = (state) =>
-  `⚠ claude-code: OpenCode ${state.version} изменился — ${state.problems.join("; ")}. Сжатие или служебные запросы могут снова тратить ходы Claude. Что делать: дать агенту готовый промпт ${ADAPT_PROMPT} (напоминание — раз в час, пока не исправлено).`
+/** The warning a window shows (every hour) while the check for this OpenCode version fails. */
+export const CHECK_WARNING = (state, language) => texts(language).checkWarning(state, ADAPT_PROMPT)

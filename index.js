@@ -10,7 +10,8 @@
 //     user message, Claude Code keeps its own transcript, the prompt cache works as in CLI;
 //   * images: streaming input is always on;
 //   * helper requests of OpenCode (title, summary: no tools) are plain model calls, not turns;
-//   * OpenCode's compaction is answered without Claude: Claude Code compacts its own session;
+//   * OpenCode's /compact runs Claude Code's own /compact in the window's session (OpenCode's
+//     summary of a history Claude Code does not read would only cost a turn);
 //   * Claude Code compacting its context is shown in the window (it can take a while);
 //   * after every OpenCode update the rules above are checked against OpenCode's program; a failed
 //     check notifies (Windows notification, a warning in each window once, the log);
@@ -24,8 +25,9 @@ import os from "node:os"
 import { appendFileSync } from "node:fs"
 import path from "node:path"
 import { noteChannel, compactionHooks } from "./notes.js"
+import { texts, compactionAnswer } from "./texts.js"
 import { watchOpenCode, openCodeVersion, installedOpenCodeVersion, readCheckState, toast, CHECK_WARNING } from "./opencode-check.js"
-import { sessionDirectory, loadSessionMap, saveSessionMap, resolvePeersMcp, peersMcpServer, isHelperRequest, helperSettings, isCompactionRequest, compactionSummary, autoCompactWindowFor, rawUserTurn, textResult, textStream } from "./lib.js"
+import { sessionDirectory, loadSessionMap, saveSessionMap, resolvePeersMcp, peersMcpServer, isHelperRequest, helperSettings, isCompactionRequest, autoCompactWindowFor, disabledTools, rawUserTurn, textResult, textStream } from "./lib.js"
 
 const BASE_SETTINGS = {
   systemPrompt: { type: "preset", preset: "claude_code" },
@@ -85,7 +87,9 @@ export function createClaudeCode(options = {}) {
   }
   const sessions = loadSessionMap()
   const warned = new Set() // `version:session:hour` -- a failed check is repeated in each window once an hour
+  const lang = options.language ?? "en" // the provider's own lines in windows: "en" (default) or "ru"
   const contextWindows = new Map() // OpenCode session -> the model's window Claude Code reported last
+  const modelNames = new Map() // OpenCode session -> the real model Claude Code ran (claude-haiku-4-5-...)
   // The OpenCode check runs at load too (no request needed) and reminds every hour while it fails.
   const hour = () => Math.floor(Date.now() / 3_600_000)
   if (options.watchOpenCode !== false) startWatch()
@@ -104,7 +108,8 @@ export function createClaudeCode(options = {}) {
   // built-in tools switched off (both from the provider options).
   const claudeSettings = (modelId) => {
     const threshold = autoCompactWindowFor(options.autoCompactWindow, modelId)
-    const disabled = [...(userSettings.disallowedTools ?? []), ...(options.disabledTools ?? [])]
+    // `tools: { "Artifact": false, ... }` -- a tool set to false is removed from Claude Code's context
+    const disabled = disabledTools(options.tools, userSettings.disallowedTools)
     return {
       ...(threshold ? { env: { ...(userSettings.env ?? process.env), CLAUDE_CODE_AUTO_COMPACT_WINDOW: String(threshold) } } : {}),
       ...(disabled.length ? { disallowedTools: disabled } : {}),
@@ -123,6 +128,35 @@ export function createClaudeCode(options = {}) {
   }
 
   const model = (modelId) => {
+    // OpenCode's /compact (auto or manual): Claude Code's own /compact in the window's Claude Code session --
+    // it really shrinks what Claude reads every turn. OpenCode gets a short answer in its template instead of
+    // a summary (it keeps that as its own history, which Claude Code does not read).
+    const compact = async (kind, callOptions, ocSession) => {
+      const t = texts(lang)
+      const limits = { model: modelNames.get(ocSession) ?? modelId, threshold: autoCompactWindowFor(options.autoCompactWindow, modelId), contextWindow: contextWindows.get(ocSession) }
+      const answer = (line) => (kind === "generate" ? textResult : textStream)(compactionAnswer(lang, line, limits))
+      const resume = ocSession ? sessions[ocSession] : undefined
+      if (!resume) return answer(t.compactNothing)
+      const cwd = await sessionDirectory(ocSession)
+      if (!cwd) return answer(t.compactFailed("unknown directory"))
+      let compacted = false
+      const hooks = { ...(userSettings.hooks ?? {}), PostCompact: [...(userSettings.hooks?.PostCompact ?? []), { hooks: [async () => ((compacted = true), { continue: true })] }] }
+      const started = Date.now()
+      try {
+        const inner = createBase({
+          defaultSettings: { ...BASE_SETTINGS, ...userSettings, ...claudeSettings(modelId), ...peersSettings(ocSession), hooks, cwd, resume },
+        }).languageModel(modelId)
+        // raw "/compact" (a system-role message goes in without the package's "Human: " prefix)
+        await inner.doGenerate({ ...callOptions, prompt: [{ role: "system", content: "/compact" }], tools: undefined, toolChoice: undefined })
+      } catch (e) {
+        log(`compact failed ${ocSession}: ${e}`)
+        return answer(t.compactFailed(String(e?.message ?? e).slice(0, 200)))
+      }
+      const seconds = Math.max(1, Math.round((Date.now() - started) / 1000))
+      log(`compact ${ocSession}: ${compacted ? "done" : "no compaction event"} in ${seconds} s`)
+      return answer(compacted ? t.compactDone({ seconds }) : t.compactFailed("Claude Code reported no compaction"))
+    }
+
     const call = async (kind, callOptions) => {
       const ocSession = sessionIdOf(callOptions)
       // Diagnostics, off by default: CLAUDE_CODE_PROVIDER_PROBE=<file> records what OpenCode sends (the window's
@@ -130,11 +164,8 @@ export function createClaudeCode(options = {}) {
       if (process.env.CLAUDE_CODE_PROVIDER_PROBE) recordRequest(process.env.CLAUDE_CODE_PROVIDER_PROBE, kind, callOptions)
       // Once per OpenCode version: do the rules below still match OpenCode? (runs in the background)
       const check = options.watchOpenCode === false ? undefined : (watchOpenCode(openCodeVersion(callOptions.headers), { log }) ?? readCheckState())
-      // OpenCode's compaction: Claude Code keeps and compacts its own session, so answer without a turn.
-      if (isCompactionRequest(callOptions.prompt)) {
-        const summary = compactionSummary({ model: modelId, threshold: autoCompactWindowFor(options.autoCompactWindow, modelId), contextWindow: contextWindows.get(ocSession) })
-        return kind === "generate" ? textResult(summary) : textStream(summary)
-      }
+      // OpenCode's compaction: Claude Code's own /compact in the window's session instead.
+      if (isCompactionRequest(callOptions.prompt)) return compact(kind, callOptions, ocSession)
       // Helper request (title, summary, ...): a plain model call, never a turn of the window's session.
       if (isHelperRequest(callOptions)) {
         const helper = createBase({
@@ -155,9 +186,9 @@ export function createClaudeCode(options = {}) {
       const notes = noteChannel()
       if (check && !check.ok && !warned.has(`${check.version}:${ocSession}:${hour()}`)) {
         warned.add(`${check.version}:${ocSession}:${hour()}`)
-        notes.push(CHECK_WARNING(check))
+        notes.push(CHECK_WARNING(check, lang))
       }
-      const hooks = compactionHooks(notes, userSettings.hooks)
+      const hooks = compactionHooks(notes, userSettings.hooks, lang)
       const inner = createBase({
         defaultSettings: { ...BASE_SETTINGS, ...userSettings, ...claudeSettings(modelId), ...peersSettings(ocSession), hooks, cwd, ...(resume ? { resume } : {}) },
       }).languageModel(modelId)
@@ -166,8 +197,9 @@ export function createClaudeCode(options = {}) {
       const opts = { ...callOptions, prompt, tools: undefined, toolChoice: undefined }
 
       const noteWindow = (meta) => {
-        const cw = Object.values(meta?.["claude-code"]?.modelUsage ?? {}).map((u) => u?.contextWindow).find(Boolean)
-        if (cw) contextWindows.set(ocSession, cw)
+        const [real, u] = Object.entries(meta?.["claude-code"]?.modelUsage ?? {}).find(([, u]) => u?.contextWindow) ?? []
+        if (u) contextWindows.set(ocSession, u.contextWindow)
+        if (real) modelNames.set(ocSession, real)
       }
       const remember = (id) => {
         if (id && sessions[ocSession] !== id) {
