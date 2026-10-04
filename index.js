@@ -10,6 +10,7 @@
 //     user message, Claude Code keeps its own transcript, the prompt cache works as in CLI;
 //   * images: streaming input is always on;
 //   * helper requests of OpenCode (title, summary: no tools) are plain model calls, not turns;
+//   * OpenCode's compaction is answered without Claude: Claude Code compacts its own session;
 //   * letters between OpenCode windows: OpenCode's tool list is dropped, so the opencode-peers tools
 //     (peer_list, peer_send, ...) come to Claude Code as the MCP server `peers`, acting for the
 //     requesting OpenCode session.
@@ -17,7 +18,7 @@
 // only the factory (the package itself exports createAPICallError first).
 import { createClaudeCode as createBase } from "ai-sdk-provider-claude-code"
 import os from "node:os"
-import { sessionDirectory, loadSessionMap, saveSessionMap, resolvePeersMcp, peersMcpServer, isHelperRequest, helperSettings } from "./lib.js"
+import { sessionDirectory, loadSessionMap, saveSessionMap, resolvePeersMcp, peersMcpServer, isHelperRequest, helperSettings, isCompactionRequest, COMPACTION_SUMMARY, textResult, textStream } from "./lib.js"
 
 const BASE_SETTINGS = {
   systemPrompt: { type: "preset", preset: "claude_code" },
@@ -67,6 +68,8 @@ export function createClaudeCode(options = {}) {
   const model = (modelId) => {
     const call = async (kind, callOptions) => {
       const ocSession = sessionIdOf(callOptions)
+      // OpenCode's compaction: Claude Code keeps and compacts its own session, so answer without a turn.
+      if (isCompactionRequest(callOptions.prompt)) return kind === "generate" ? textResult(COMPACTION_SUMMARY) : textStream(COMPACTION_SUMMARY)
       // Helper request (title, summary, ...): a plain model call, never a turn of the window's session.
       if (isHelperRequest(callOptions)) {
         const helper = createBase({

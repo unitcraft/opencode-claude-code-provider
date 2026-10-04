@@ -5,7 +5,7 @@ import os from "node:os"
 import path from "node:path"
 import { DatabaseSync } from "node:sqlite"
 import { test } from "node:test"
-import { helperSettings, isHelperRequest, loadSessionMap, peersMcpServer, resolvePeersMcp, saveSessionMap, sessionDirectory } from "../lib.js"
+import { COMPACTION_SUMMARY, helperSettings, isCompactionRequest, isHelperRequest, loadSessionMap, peersMcpServer, resolvePeersMcp, saveSessionMap, sessionDirectory } from "../lib.js"
 
 function fakeOpencode() {
   const data = mkdtempSync(path.join(os.tmpdir(), "occ-"))
@@ -82,4 +82,39 @@ test("a helper request runs as a plain call: its own system prompt, no tools, no
   assert.deepEqual(s.settingSources, [])
   assert.equal(s.persistSession, false)
   assert.equal(s.maxTurns, 1)
+})
+
+// OpenCode's compaction request, as measured 2026-10-04 (last user message, shortened)
+const compactionAsk = (opening) => [
+  { role: "system", content: "You are an AI agent running in OpenCode" },
+  { role: "user", content: [{ type: "text", text: "Remember the code word PELICAN-42." }] },
+  { role: "assistant", content: [{ type: "text", text: "Saved." }] },
+  { role: "user", content: [{ type: "text", text: `${opening}\n\nYou MUST use this format for your response.\n<template>\n## Objective\n- [..]\n## Requirements\n</template>` }] },
+]
+
+test("OpenCode's compaction request is recognized, both openings; ordinary turns are not", () => {
+  assert.equal(isCompactionRequest(compactionAsk("You MUST summarize the conversation above into a structured summary that will be given to another agent to resume the work.")), true)
+  assert.equal(isCompactionRequest(compactionAsk("Update the existing checkpoint in the conversation above into one consolidated summary.")), true)
+  assert.equal(isCompactionRequest([{ role: "user", content: [{ type: "text", text: "Write a README with ## Objective and ## Requirements" }] }]), false)
+  assert.equal(isCompactionRequest([{ role: "user", content: "/compact" }]), false)
+  // only the LAST user message counts: a compaction ask earlier in the history is not a compaction now
+  assert.equal(isCompactionRequest([...compactionAsk("You MUST summarize the conversation above into a structured summary"), { role: "assistant", content: [] }, { role: "user", content: [{ type: "text", text: "next task" }] }]), false)
+  assert.match(COMPACTION_SUMMARY, /^## Objective$/m) // OpenCode accepts a summary only with its template headings
+})
+
+test("the provider answers compaction itself: no Claude Code run, no session lookup", async () => {
+  const { createClaudeCode } = await import("../index.js")
+  const model = createClaudeCode({ peersMcp: false }).languageModel("haiku")
+  const tools = [{ type: "function", name: "bash", inputSchema: { type: "object" } }]
+  // no session header: a real run would be refused ("cannot resolve the directory"), so an answer proves no run
+  const g = await model.doGenerate({ prompt: compactionAsk("You MUST summarize the conversation above into a structured summary"), tools, headers: {} })
+  assert.equal(g.content[0].text, COMPACTION_SUMMARY)
+  assert.equal(g.usage.inputTokens.total, 0)
+  const s = await model.doStream({ prompt: compactionAsk("Update the existing checkpoint in the conversation above into one consolidated summary"), tools, headers: {} })
+  const parts = []
+  for await (const p of s.stream) parts.push(p)
+  assert.deepEqual(parts.map((p) => p.type), ["stream-start", "text-start", "text-delta", "text-end", "finish"])
+  assert.equal(parts[2].delta, COMPACTION_SUMMARY)
+  // an ordinary turn still goes to Claude Code (here refused: no session)
+  await assert.rejects(model.doGenerate({ prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }], tools, headers: {} }), /cannot resolve the directory/)
 })

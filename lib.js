@@ -134,3 +134,60 @@ export function helperSettings(prompt) {
     maxTurns: 1,
   }
 }
+
+/**
+ * COMPACTION. OpenCode's compaction (auto or /compact) comes as an ordinary turn of the window (its tools,
+ * its session) whose last user message asks for a summary in OpenCode's template. Measured 2026-10-04: on
+ * claude-code it became a full Claude Code turn (Haiku: $0.03, 137k cached tokens read), the summary was
+ * APPENDED to Claude Code's own session, and the next turn resumed that full session anyway -- OpenCode's
+ * compaction cannot shrink what Claude Code sees, it only spends a turn. Claude Code compacts its own
+ * session itself. Markers: OpenCode's two fixed openings and the template's first heading.
+ */
+const COMPACTION_OPENINGS = [
+  "You MUST summarize the conversation above into a structured summary",
+  "Update the existing checkpoint in the conversation above into one consolidated summary",
+]
+
+export function isCompactionRequest(prompt) {
+  const last = [...(prompt ?? [])].reverse().find((m) => m.role === "user")
+  if (!last) return false
+  const text = typeof last.content === "string" ? last.content : (last.content ?? []).map((p) => (p.type === "text" ? p.text : "")).join("")
+  return text.includes("## Objective") && COMPACTION_OPENINGS.some((o) => text.includes(o))
+}
+
+/** The summary OpenCode stores instead of a Claude Code turn (OpenCode checks the template headings). */
+export const COMPACTION_SUMMARY = `## Objective
+- Not summarized: this window runs on the claude-code provider. Claude Code keeps the whole conversation in its own session and compacts it itself when needed, so OpenCode's compaction is skipped instead of spending a Claude turn.
+
+## Important Context
+- The model continues from its own Claude Code session, not from this summary.`
+
+/** A finished text answer without calling the model: for doGenerate (v3 result). */
+export function textResult(text) {
+  return {
+    content: [{ type: "text", text }],
+    finishReason: { unified: "stop", raw: "end_turn" },
+    usage: { inputTokens: { total: 0, noCache: 0, cacheRead: 0, cacheWrite: 0 }, outputTokens: { total: 0, text: undefined, reasoning: undefined }, raw: undefined },
+    warnings: [],
+  }
+}
+
+/** The same answer as a v3 stream, for doStream. */
+export function textStream(text) {
+  const r = textResult(text)
+  const parts = [
+    { type: "stream-start", warnings: [] },
+    { type: "text-start", id: "0" },
+    { type: "text-delta", id: "0", delta: text },
+    { type: "text-end", id: "0" },
+    { type: "finish", finishReason: r.finishReason, usage: r.usage },
+  ]
+  return {
+    stream: new ReadableStream({
+      start(ctl) {
+        for (const p of parts) ctl.enqueue(p)
+        ctl.close()
+      },
+    }),
+  }
+}

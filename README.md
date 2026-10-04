@@ -31,6 +31,12 @@ Nothing is spoofed: Claude Code runs under your own Claude login, exactly as in 
   as a turn of the window's session. (Before 2026-10-04 it was a full turn: with `title` on
   `claude-code` the window's message was executed twice — a `peer_send` letter went out twice —
   and the title was the first line of that answer.) So `title` / `summary` may use `claude-code`.
+- **OpenCode's compaction is skipped** (auto or `/compact`). Claude Code keeps the whole
+  conversation in its own session and compacts it itself; OpenCode's compaction could not shrink
+  that, it only cost a full Claude turn and appended its summary to Claude Code's session
+  (measured 2026-10-04). The provider recognizes OpenCode's compaction request and answers it with
+  a short fixed note in OpenCode's format, without calling Claude. If OpenCode changes its
+  compaction wording, the request is no longer recognized and is a normal turn again.
 - **Letters between windows** ([opencode-peers](https://github.com/unitcraft/opencode-peers)):
   OpenCode's tool list is dropped, so the plugin's `peer_*` tools would be missing. Every request
   gets the peers MCP server (`node <opencode-peers>/mcp.ts`, tools `mcp__peers__peer_list`, ...,
