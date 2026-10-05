@@ -35,7 +35,7 @@ import { texts, compactionAnswer } from "./texts.js"
 import { settingsFor, toolSources, switchSources } from "./settings.js"
 import { isToolsCommand, discoverClaude, contextUsage, toolsReport } from "./tools-report.js"
 import { watchOpenCode, openCodeVersion, installedOpenCodeVersion, readCheckState, toast, CHECK_WARNING } from "./opencode-check.js"
-import { sessionDirectory, loadSessionMap, saveSessionMap, resolvePeersMcp, peersMcpServer, isHelperRequest, helperSettings, isCompactionRequest, autoCompactWindowFor, disabledTools, enabledSkills, TIME_HINT, timeStamper, hhmm, rawUserTurn, newUserTurn, textResult, textStream } from "./lib.js"
+import { sessionDirectory, loadSessionMap, saveSessionMap, resolvePeersMcp, peersMcpServer, isHelperRequest, helperSettings, isCompactionRequest, autoCompactWindowFor, disabledTools, enabledSkills, TIME_HINT, timeStamper, hhmm, rawUserTurn, newUserTurn, lastCallUsage, shortenToolInput, textResult, textStream } from "./lib.js"
 
 const BASE_SETTINGS = {
   systemPrompt: { type: "preset", preset: "claude_code" },
@@ -245,7 +245,14 @@ export function createClaudeCode(options = {}) {
         warned.add(`${check.version}:${ocSession}:${hour()}`)
         notes.push(CHECK_WARNING(check, cfg.language))
       }
-      const watch = compactionWatch(notes, { userHooks: userSettings.hooks, userOnSdkMessage: userSettings.onSdkMessage, language: cfg.language })
+      // the context size is the input of the turn's last model call, not the sum over its calls (lib.js)
+      const usage = lastCallUsage()
+      const onSdk = (m) => {
+        usage.onSdkMessage(m)
+        userSettings.onSdkMessage?.(m)
+      }
+      const watch = compactionWatch(notes, { userHooks: userSettings.hooks, userOnSdkMessage: onSdk, language: cfg.language })
+      const toolMax = Number(cfg.toolInputMax) || 0
       const skills = await skillsFor(cfg, ocSession, cwd)
       // timeStamp: a constant line appended to Claude Code's system prompt (cache-stable); the stamp itself below
       const timeHint = cfg.timeStamp ? { systemPrompt: { type: "preset", preset: "claude_code", append: TIME_HINT } } : {}
@@ -269,7 +276,8 @@ export function createClaudeCode(options = {}) {
         }
       }
       if (kind === "generate") {
-        const r = await inner.doGenerate(opts)
+        const r0 = await inner.doGenerate(opts)
+        const r = { ...r0, usage: usage.apply(r0.usage), content: r0.content.map((c) => (c.type === "tool-call" && toolMax ? { ...c, input: shortenToolInput(c.input, toolMax) } : c)) }
         remember(claudeSessionFrom(r))
         noteWindow(r.providerMetadata)
         watch.finish()
@@ -285,8 +293,12 @@ export function createClaudeCode(options = {}) {
           start(ctl) {
             notes.attach(ctl)
           },
-          transform(part, ctl) {
+          transform(part0, ctl) {
+            // tool calls: long values cut for display; the streamed pieces of the input are not shown (the call is)
+            if (toolMax && part0.type === "tool-input-delta") return
+            let part = toolMax && part0.type === "tool-call" ? { ...part0, input: shortenToolInput(part0.input, toolMax) } : part0
             if (part.type === "finish") {
+              part = { ...part, usage: usage.apply(part.usage) }
               remember(claudeSessionFrom(part))
               noteWindow(part.providerMetadata)
               watch.finish()

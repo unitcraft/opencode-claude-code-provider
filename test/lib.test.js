@@ -6,7 +6,7 @@ import path from "node:path"
 import { DatabaseSync } from "node:sqlite"
 import { test } from "node:test"
 import { compactionAnswer, texts } from "../src/texts.js"
-import { autoCompactWindowFor, disabledTools, helperSettings, newUserTurn, rawUserTurn, isCompactionRequest, isHelperRequest, loadSessionMap, peersMcpServer, resolvePeersMcp, saveSessionMap, sessionDirectory } from "../src/lib.js"
+import { autoCompactWindowFor, disabledTools, helperSettings, lastCallUsage, newUserTurn, rawUserTurn, shortenToolInput, isCompactionRequest, isHelperRequest, loadSessionMap, peersMcpServer, resolvePeersMcp, saveSessionMap, sessionDirectory } from "../src/lib.js"
 
 function fakeOpencode() {
   const data = mkdtempSync(path.join(os.tmpdir(), "occ-"))
@@ -169,4 +169,28 @@ test("newUserTurn: everything the user side queued since the last answer, merged
   assert.equal(merged[0].content.length, 3)
   // no user message at the end: the history without system messages
   assert.deepEqual(newUserTurn([{ role: "system", content: "s" }, a]), [a])
+})
+
+test("lastCallUsage: the context is the input of the last model call, not the sum over the turn", () => {
+  const u = lastCallUsage()
+  const summed = { inputTokens: { total: 125787, noCache: 44, cacheRead: 125132, cacheWrite: 611 }, outputTokens: { total: 1618 } }
+  assert.equal(u.apply(summed), summed) // nothing seen yet: as is
+  u.onSdkMessage({ type: "assistant", message: { usage: { input_tokens: 10, cache_read_input_tokens: 29000, cache_creation_input_tokens: 300 } } })
+  u.onSdkMessage({ type: "assistant", message: { usage: { input_tokens: 12, cache_read_input_tokens: 34000, cache_creation_input_tokens: 500 } } })
+  u.onSdkMessage({ type: "assistant", parent_tool_use_id: "t1", message: { usage: { input_tokens: 5, cache_read_input_tokens: 900000 } } }) // a subagent: not the main context
+  u.onSdkMessage({ type: "user", message: {} })
+  const fixed = u.apply(summed)
+  assert.deepEqual(fixed.inputTokens, { total: 34512, noCache: 12, cacheRead: 34000, cacheWrite: 500 })
+  assert.equal(fixed.outputTokens.total, 1618) // output stays summed
+})
+
+test("shortenToolInput: long string values are cut for display", () => {
+  const long = "x".repeat(1000)
+  const out = JSON.parse(shortenToolInput(JSON.stringify({ command: long, description: "short", n: 5, list: [long] }), 300))
+  assert.equal(out.command, "x".repeat(300) + "…(+700)")
+  assert.equal(out.description, "short")
+  assert.equal(out.n, 5)
+  assert.equal(out.list[0].length, 300 + "…(+700)".length)
+  assert.equal(shortenToolInput(JSON.stringify({ command: long }), 0), JSON.stringify({ command: long })) // 0 = whole input
+  assert.deepEqual(shortenToolInput({ a: long }, 10), { a: "x".repeat(10) + "…(+990)" }) // an object stays an object
 })

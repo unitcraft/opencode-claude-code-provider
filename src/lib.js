@@ -199,6 +199,51 @@ export function rawUserTurn(messages) {
   return [{ role: "system", content: c.map((p) => p.text).join("\n") }]
 }
 
+/**
+ * The context size of a turn. Claude Code makes several model calls in one turn (one per tool step), and the
+ * package reports the usage SUMMED over them; OpenCode takes the input of the step as the context size, so a turn
+ * with 4 tools showed 125K for a ~35K context (measured 2026-10-05). The true context is the input of the LAST call:
+ * the tracker remembers each top-level assistant message's usage (subagent messages carry parent_tool_use_id) and
+ * replaces the input part of the final usage with it; output stays summed.
+ */
+export function lastCallUsage() {
+  let last
+  return {
+    onSdkMessage(m) {
+      const u = m?.type === "assistant" && !m.parent_tool_use_id ? m.message?.usage : undefined
+      if (u && (u.input_tokens != null || u.cache_read_input_tokens != null)) last = u
+    },
+    apply(usage) {
+      if (!last || !usage) return usage
+      const noCache = last.input_tokens ?? 0
+      const cacheRead = last.cache_read_input_tokens ?? 0
+      const cacheWrite = last.cache_creation_input_tokens ?? 0
+      return { ...usage, inputTokens: { ...(usage.inputTokens ?? {}), total: noCache + cacheRead + cacheWrite, noCache, cacheRead, cacheWrite } }
+    },
+  }
+}
+
+/**
+ * Tool calls of Claude Code are shown in the OpenCode window with their whole input (a file written by one Bash
+ * command filled the screen). They are executed by Claude Code, OpenCode only shows them, so long string values are
+ * cut for display: the first `max` characters and "…(+N)". max 0 = whole input.
+ */
+export function shortenToolInput(input, max) {
+  if (!max || max < 1) return input
+  const cut = (v) => {
+    if (typeof v === "string") return v.length > max ? `${v.slice(0, max)}…(+${v.length - max})` : v
+    if (Array.isArray(v)) return v.map(cut)
+    if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, cut(x)]))
+    return v
+  }
+  if (typeof input !== "string") return cut(input)
+  try {
+    return JSON.stringify(cut(JSON.parse(input)))
+  } catch {
+    return cut(input)
+  }
+}
+
 /** A finished text answer without calling the model: for doGenerate (v3 result). */
 export function textResult(text) {
   return {

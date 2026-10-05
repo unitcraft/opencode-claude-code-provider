@@ -36,9 +36,12 @@ export const DEFAULTS = Object.freeze({
   },
   // The provider stamps HH:MM at the start of each answer text and tells the model so (no `date` calls).
   timeStamp: false,
+  // Claude Code's tool calls are shown in the window with long string values cut to this many characters
+  // ("…(+N)"); 0 shows the whole input. Display only: Claude Code executes the tools.
+  toolInputMax: 300,
 })
 
-const KEYS = ["language", "autoCompactWindow", "tools", "skills", "timeStamp"]
+const KEYS = ["language", "autoCompactWindow", "tools", "skills", "timeStamp", "toolInputMax"]
 const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v)
 const normalize = (key, v) => (key === "autoCompactWindow" && typeof v === "number" ? { "*": v } : v)
 
