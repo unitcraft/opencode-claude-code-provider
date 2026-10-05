@@ -213,6 +213,10 @@ turn again. By hand: `npm run check-opencode`.
 - OpenCode plugins that add to OpenCode's system prompt (opencode-windows-env's time hint) or act on
   OpenCode's tool calls (opencode-claude-guards) do not reach these windows; the repository's own
   `.claude` settings and hooks do.
+- Background work (Bash `run_in_background`, Monitor, background agents) does not outlive the turn: Claude Code's
+  process ends with the turn and the task is killed (measured 2026-10-05). The next turn tells the model the task
+  was stopped; the provider drops the empty turn Claude Code makes of that notice, which used to end the window's
+  turn with no answer ([plan 002](doc/plans/002-background-tasks.md)).
 
 ## Related
 

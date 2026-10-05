@@ -34,6 +34,7 @@ import { noteChannel, compactionWatch } from "./notes.js"
 import { texts, compactionAnswer } from "./texts.js"
 import { DEFAULTS, explicitSettingsFor, settingsFor, toolSources, switchSources } from "./settings.js"
 import { opencodeWindow } from "./opencode-window.js"
+import { spawnClaudeCode } from "./spawn.js"
 import { isToolsCommand, discoverClaude, contextUsage, toolsReport } from "./tools-report.js"
 import { watchOpenCode, openCodeVersion, installedOpenCodeVersion, readCheckState, toast, CHECK_WARNING } from "./opencode-check.js"
 import { accountKey, resumeFor, sessionDirectory, loadSessionMap, saveSessionMap, resolvePeersMcp, peersMcpServer, isHelperRequest, helperSettings, isCompactionRequest, autoCompactWindowFor, disabledTools, enabledSkills, TIME_HINT, timeStamper, hhmm, rawUserTurn, newUserTurn, lastCallUsage, shortenToolInput, mainModelUsage, textResult, textStream } from "./lib.js"
@@ -117,6 +118,8 @@ export function createClaudeCode(options = {}) {
     autoCompactWindowFor(DEFAULTS.autoCompactWindow, modelId)
   // Claude Code's own settings per request: the auto-compaction threshold of this model and the
   // built-in tools switched off (both from the provider options).
+  // Claude Code's process of a window's turn: the empty result of a task-notification turn dropped (src/spawn.js)
+  const spawnFiltered = (o) => spawnClaudeCode(o, log)
   const claudeSettings = (modelId, cfg, cwd) => {
     const threshold = thresholdFor(modelId, cwd)
     // the window's Claude account: claudeConfigDir of the project's file, else of opencode.jsonc (plan 001, Ph.2)
@@ -162,7 +165,7 @@ export function createClaudeCode(options = {}) {
       const started = Date.now()
       try {
         const inner = createBase({
-          defaultSettings: { ...BASE_SETTINGS, ...userSettings, ...claudeSettings(modelId, cfg, cwd), ...peersSettings(ocSession), onSdkMessage, cwd, resume },
+          defaultSettings: { ...BASE_SETTINGS, ...userSettings, ...claudeSettings(modelId, cfg, cwd), ...peersSettings(ocSession), onSdkMessage, cwd, resume, spawnClaudeCodeProcess: spawnFiltered },
         }).languageModel(modelId)
         // raw "/compact" (a system-role message goes in without the package's "Human: " prefix)
         await inner.doGenerate({ ...callOptions, prompt: [{ role: "system", content: "/compact" }], tools: undefined, toolChoice: undefined })
@@ -260,6 +263,9 @@ export function createClaudeCode(options = {}) {
       // the context size is the input of the turn's last model call, not the sum over its calls (lib.js)
       const usage = lastCallUsage()
       const onSdk = (m) => {
+        // Diagnostics, off by default: CLAUDE_CODE_PROVIDER_SDKLOG=<file> records Claude Code's messages of each turn.
+        if (process.env.CLAUDE_CODE_PROVIDER_SDKLOG) appendFileSync(process.env.CLAUDE_CODE_PROVIDER_SDKLOG, `${new Date().toISOString()} ${ocSession} ${JSON.stringify(m).slice(0, 400)}
+`)
         usage.onSdkMessage(m)
         userSettings.onSdkMessage?.(m)
       }
@@ -270,7 +276,7 @@ export function createClaudeCode(options = {}) {
       const timeHint = cfg.timeStamp ? { systemPrompt: { type: "preset", preset: "claude_code", append: TIME_HINT } } : {}
       const stamp = cfg.timeStamp ? timeStamper() : (part) => part
       const inner = createBase({
-        defaultSettings: { ...BASE_SETTINGS, ...userSettings, ...timeHint, ...claudeSettings(modelId, cfg, cwd), ...peersSettings(ocSession), ...(skills ? { skills } : {}), hooks: watch.hooks, onSdkMessage: watch.onSdkMessage, cwd, ...(resume ? { resume } : {}) },
+        defaultSettings: { ...BASE_SETTINGS, ...userSettings, ...timeHint, ...claudeSettings(modelId, cfg, cwd), ...peersSettings(ocSession), ...(skills ? { skills } : {}), hooks: watch.hooks, onSdkMessage: watch.onSdkMessage, cwd, ...(resume ? { resume } : {}), spawnClaudeCodeProcess: spawnFiltered },
       }).languageModel(modelId)
       // The user's text goes to Claude Code as typed (no "Human: " prefix of the package).
       const prompt = rawUserTurn(resume ? newUserTurn(callOptions.prompt) : callOptions.prompt.filter((m) => m.role !== "system"))
