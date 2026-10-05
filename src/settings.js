@@ -15,7 +15,7 @@ export const DEFAULTS = Object.freeze({
   language: "en",
   // Claude Code compacts its memory at this size (tokens). Without it Claude Code picks the limit itself --
   // for 1M-window models the whole million, so every turn could re-read up to a million tokens.
-  autoCompactWindow: { opus: 400_000, sonnet: 400_000, haiku: 160_000 },
+  autoCompactWindow: { opus: 700_000, sonnet: 700_000, haiku: 200_000 },
   // Built-in Claude Code tools that are useless in an OpenCode window, removed from the context
   // (measured 2026-10-04: ~12k tokens of every turn's ~34k).
   tools: {

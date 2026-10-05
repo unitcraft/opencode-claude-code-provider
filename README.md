@@ -94,7 +94,7 @@ cd D:/Sources/opencode-claude-code-provider && npm install
 Three layers, each over the previous one (`src/settings.js`):
 
 1. **Built-in defaults** -- nothing to configure for the usual case: English lines;
-   `autoCompactWindow` opus 400k, sonnet 400k, haiku 160k tokens; the built-in Claude Code tools
+   `autoCompactWindow` opus 700k, sonnet 700k, haiku 200k tokens (owner's choice 2026-10-05); the built-in Claude Code tools
    that are useless in an OpenCode window switched off (claude.ai artifacts, agent teams,
    scheduling/cloud, code review: ~12k tokens of every turn).
 2. **The machine**: the provider `settings` in `opencode.jsonc`.

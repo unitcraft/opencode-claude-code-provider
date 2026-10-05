@@ -10,8 +10,8 @@ import { DEFAULTS, findProjectSettings, mergeSettings, settingsFor } from "../sr
 test("defaults alone: English, thresholds per family, the useless tools off", () => {
   const s = settingsFor({}, undefined)
   assert.equal(s.language, "en")
-  assert.equal(autoCompactWindowFor(s.autoCompactWindow, "opus"), 400000)
-  assert.equal(autoCompactWindowFor(s.autoCompactWindow, "claude-haiku-4-5"), 160000)
+  assert.equal(autoCompactWindowFor(s.autoCompactWindow, "opus"), 700000)
+  assert.equal(autoCompactWindowFor(s.autoCompactWindow, "claude-haiku-4-5"), 200000)
   assert.deepEqual(disabledTools(s.tools).sort(), Object.keys(DEFAULTS.tools).sort())
   assert.equal(disabledTools(s.tools).includes("Bash"), false)
 })
@@ -22,7 +22,7 @@ test("the machine's options over the defaults: objects merge key by key, a numbe
   assert.equal(disabledTools(s.tools).includes("WebSearch"), true)
   assert.equal(disabledTools(s.tools).includes("Artifact"), false) // switched back on
   assert.equal(autoCompactWindowFor(s.autoCompactWindow, "opus"), 300000)
-  assert.equal(autoCompactWindowFor(s.autoCompactWindow, "haiku"), 160000) // default kept
+  assert.equal(autoCompactWindowFor(s.autoCompactWindow, "haiku"), 200000) // default kept
   const all = mergeSettings(DEFAULTS, { autoCompactWindow: 250000 })
   for (const m of ["opus", "sonnet", "haiku", "fable"]) assert.equal(autoCompactWindowFor(all.autoCompactWindow, m), 250000)
 })
