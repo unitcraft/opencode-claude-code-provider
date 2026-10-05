@@ -6,7 +6,7 @@ import path from "node:path"
 import { DatabaseSync } from "node:sqlite"
 import { test } from "node:test"
 import { compactionAnswer, texts } from "../src/texts.js"
-import { autoCompactWindowFor, disabledTools, helperSettings, lastCallUsage, mainModelUsage, newUserTurn, rawUserTurn, shortenToolInput, isCompactionRequest, isHelperRequest, loadSessionMap, peersMcpServer, resolvePeersMcp, saveSessionMap, sessionDirectory } from "../src/lib.js"
+import { backgroundHint, backgroundWatch, autoCompactWindowFor, disabledTools, helperSettings, lastCallUsage, mainModelUsage, newUserTurn, rawUserTurn, shortenToolInput, isCompactionRequest, isHelperRequest, loadSessionMap, peersMcpServer, resolvePeersMcp, saveSessionMap, sessionDirectory } from "../src/lib.js"
 
 function fakeOpencode() {
   const data = mkdtempSync(path.join(os.tmpdir(), "occ-"))
@@ -237,4 +237,15 @@ test("claudeConfigDir: the project's file overrides the provider options", async
   writeFileSync(path.join(dir, ".opencode", "opencode-claude-code-provider.json"), JSON.stringify({ claudeConfigDir: "D:/acc/project" }))
   assert.equal(settingsFor({ claudeConfigDir: "D:/acc/global" }, dir).claudeConfigDir, "D:/acc/project")
   assert.equal(settingsFor({ claudeConfigDir: "D:/acc/global" }, os.tmpdir()).claudeConfigDir, "D:/acc/global")
+})
+
+test("backgroundWatch: the live set is the last background_tasks_changed, ambient watchers left out (plan 002)", () => {
+  const b = backgroundWatch()
+  assert.deepEqual(b.live(), [])
+  b.onSdkMessage({ type: "system", subtype: "background_tasks_changed", tasks: [{ task_id: "a", description: "Sleep", task_type: "local_bash" }, { task_id: "w", description: "watcher", ambient: true }] })
+  assert.deepEqual(b.live().map((x) => x.task_id), ["a"])
+  b.onSdkMessage({ type: "system", subtype: "background_tasks_changed", tasks: [] })
+  assert.deepEqual(b.live(), [])
+  assert.match(backgroundHint(true), /peer_watch/)
+  assert.doesNotMatch(backgroundHint(false), /peer_watch/)
 })

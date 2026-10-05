@@ -331,6 +331,27 @@ export const TIME_HINT =
   "The local time (HH:MM) at the start of each of your text messages is stamped by the OpenCode provider itself: do not write the time yourself and do not run date / Get-Date for it."
 
 /**
+ * What the model is told about background work (plan 002; constant: cache-stable). Claude Code's process ends with
+ * the window's turn, so a background task dies with it and its notification never comes (measured 2026-10-05).
+ */
+export const backgroundHint = (peers) =>
+  "In this OpenCode window your background work (Bash run_in_background, Monitor, background agents) is stopped when your turn ends, and no completion notification will come. " +
+  (peers
+    ? "To wait for something that must outlive the turn (a long gate, a build), use the opencode-peers tool peer_watch: it runs your waiting command in the OpenCode server and wakes this tab with the result; then end your turn."
+    : "Wait for long work within the turn, or tell the user what to check later.")
+
+/** Live background tasks of a turn, from Claude Code's background_tasks_changed (ambient watchers left out). */
+export function backgroundWatch() {
+  let live = []
+  return {
+    onSdkMessage(m) {
+      if (m?.type === "system" && m.subtype === "background_tasks_changed") live = (m.tasks ?? []).filter((t) => !t.ambient)
+    },
+    live: () => live,
+  }
+}
+
+/**
  * Stamps "HH:MM" before the first piece of every text block the model streams (not the provider's own
  * notes). Returns a function part -> part.
  */

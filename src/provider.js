@@ -37,7 +37,7 @@ import { opencodeWindow } from "./opencode-window.js"
 import { spawnClaudeCode } from "./spawn.js"
 import { isToolsCommand, discoverClaude, contextUsage, toolsReport } from "./tools-report.js"
 import { watchOpenCode, openCodeVersion, installedOpenCodeVersion, readCheckState, toast, CHECK_WARNING } from "./opencode-check.js"
-import { accountKey, resumeFor, sessionDirectory, loadSessionMap, saveSessionMap, resolvePeersMcp, peersMcpServer, isHelperRequest, helperSettings, isCompactionRequest, autoCompactWindowFor, disabledTools, enabledSkills, TIME_HINT, timeStamper, hhmm, rawUserTurn, newUserTurn, lastCallUsage, shortenToolInput, mainModelUsage, textResult, textStream } from "./lib.js"
+import { accountKey, resumeFor, sessionDirectory, loadSessionMap, saveSessionMap, resolvePeersMcp, peersMcpServer, isHelperRequest, helperSettings, isCompactionRequest, autoCompactWindowFor, disabledTools, enabledSkills, TIME_HINT, backgroundHint, backgroundWatch, timeStamper, hhmm, rawUserTurn, newUserTurn, lastCallUsage, shortenToolInput, mainModelUsage, textResult, textStream } from "./lib.js"
 
 const BASE_SETTINGS = {
   systemPrompt: { type: "preset", preset: "claude_code" },
@@ -262,7 +262,9 @@ export function createClaudeCode(options = {}) {
       }
       // the context size is the input of the turn's last model call, not the sum over its calls (lib.js)
       const usage = lastCallUsage()
+      const background = backgroundWatch() // tasks alive at the end of the turn die with it (plan 002)
       const onSdk = (m) => {
+        background.onSdkMessage(m)
         // Diagnostics, off by default: CLAUDE_CODE_PROVIDER_SDKLOG=<file> records Claude Code's messages of each turn.
         if (process.env.CLAUDE_CODE_PROVIDER_SDKLOG) appendFileSync(process.env.CLAUDE_CODE_PROVIDER_SDKLOG, `${new Date().toISOString()} ${ocSession} ${JSON.stringify(m).slice(0, 400)}
 `)
@@ -273,7 +275,9 @@ export function createClaudeCode(options = {}) {
       const toolMax = Number(cfg.toolInputMax) || 0
       const skills = await skillsFor(cfg, ocSession, cwd)
       // timeStamp: a constant line appended to Claude Code's system prompt (cache-stable); the stamp itself below
-      const timeHint = cfg.timeStamp ? { systemPrompt: { type: "preset", preset: "claude_code", append: TIME_HINT } } : {}
+      // + the background line (plan 002): constant per configuration, so the prompt cache holds
+      const append = [cfg.timeStamp ? TIME_HINT : "", backgroundHint(Boolean(peersMcp))].filter(Boolean).join("\n\n")
+      const timeHint = { systemPrompt: { type: "preset", preset: "claude_code", append } }
       const stamp = cfg.timeStamp ? timeStamper() : (part) => part
       const inner = createBase({
         defaultSettings: { ...BASE_SETTINGS, ...userSettings, ...timeHint, ...claudeSettings(modelId, cfg, cwd), ...peersSettings(ocSession), ...(skills ? { skills } : {}), hooks: watch.hooks, onSdkMessage: watch.onSdkMessage, cwd, ...(resume ? { resume } : {}), spawnClaudeCodeProcess: spawnFiltered },
@@ -300,6 +304,7 @@ export function createClaudeCode(options = {}) {
         remember(claudeSessionFrom(r))
         noteWindow(r.providerMetadata)
         watch.finish()
+        if (background.live().length) notes.push(texts(cfg.language).backgroundStopped(background.live().map((x) => x.description).join("; ")))
         const shown = notes.take().map((text) => ({ type: "text", text: `_${text}_\n\n` }))
         // timeStamp: HH:MM before the first answer text
         const first = cfg.timeStamp ? r.content.findIndex((c) => c.type === "text" && c.text) : -1
@@ -321,6 +326,7 @@ export function createClaudeCode(options = {}) {
               remember(claudeSessionFrom(part))
               noteWindow(part.providerMetadata)
               watch.finish()
+              if (background.live().length) notes.push(texts(cfg.language).backgroundStopped(background.live().map((x) => x.description).join("; ")))
               notes.drain() // anything still waiting goes out before the end
             }
             notes.pass(stamp(part))

@@ -216,7 +216,9 @@ turn again. By hand: `npm run check-opencode`.
 - Background work (Bash `run_in_background`, Monitor, background agents) does not outlive the turn: Claude Code's
   process ends with the turn and the task is killed (measured 2026-10-05). The next turn tells the model the task
   was stopped; the provider drops the empty turn Claude Code makes of that notice, which used to end the window's
-  turn with no answer ([plan 002](doc/plans/002-background-tasks.md)).
+  turn with no answer ([plan 002](doc/plans/002-background-tasks.md)). Claude Code's system prompt says so and points
+  to opencode-peers' `peer_watch` (the plugin waits in the OpenCode server and wakes the tab); a turn that ends with
+  live background tasks shows a note naming them.
 
 ## Related
 
