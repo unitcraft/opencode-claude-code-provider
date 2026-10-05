@@ -224,7 +224,7 @@ turn again. By hand: `npm run check-opencode`.
 
 Other OpenCode plugins of the same set (they work independently; together they are tested on one machine):
 
-- [opencode-peers](https://github.com/unitcraft/opencode-peers) — letters and tasks between OpenCode tabs, addressed by `project.role`
+- [opencode-peers](https://github.com/unitcraft/opencode-peers) — letters and tasks between OpenCode sessions on one machine, across windows and projects, addressed by `project.role`
 - [opencode-windows-env](https://github.com/unitcraft/opencode-windows-env) — a sane command environment on Windows and a time stamp on agent messages
 - [opencode-claude-guards](https://github.com/unitcraft/opencode-claude-guards) — the repository's Claude Code rules (hooks, permissions) in OpenCode windows
 
