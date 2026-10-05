@@ -59,6 +59,17 @@ export function sessionMapFile(dataDir = opencodeDataDir()) {
   return path.join(dataDir, "claude-code-sessions.json")
 }
 
+// Which Claude account a window's session belongs to (plan 001, Ph.2): a project can name its own claudeConfigDir.
+// A Claude Code session lives in one account's directory, so the map remembers the account next to the session id
+// ("<OpenCode session>@account"); a session of another account is not resumed — a new one starts instead of an error.
+export const accountKey = (ocSession) => `${ocSession}@account`
+export function resumeFor(sessions, ocSession, account) {
+  const id = ocSession ? sessions[ocSession] : undefined
+  if (!id) return undefined
+  const was = sessions[accountKey(ocSession)]
+  return (was ?? "") === (account ?? "") || was === undefined ? id : undefined // older entries have no account: resume
+}
+
 export function loadSessionMap(file = sessionMapFile()) {
   try {
     return JSON.parse(readFileSync(file, "utf8"))

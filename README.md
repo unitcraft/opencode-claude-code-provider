@@ -18,9 +18,10 @@ Nothing is spoofed: Claude Code runs under your own Claude login, exactly as in 
 - **One Claude Code session per OpenCode session** (`resume`). A turn sends only the newest
   user message; Claude Code keeps its own transcript and prompt cache. The mapping lives in
   `<opencode data>/claude-code-sessions.json`.
-- **Account pinned explicitly.** `claudeConfigDir` (provider option) or the server's
-  `CLAUDE_CONFIG_DIR` is passed to Claude Code, so the account does not depend on how the
-  OpenCode service was started.
+- **Account pinned explicitly, per project if needed.** `claudeConfigDir` (the project file, else the provider
+  option, else the server's `CLAUDE_CONFIG_DIR`) is passed to Claude Code, so the account does not depend on how
+  the OpenCode service was started, and one service serves projects with different accounts. A Claude Code
+  session is resumed only under the account it started with; after a change of account the window starts anew.
 - **Permissions:** `permissionMode: auto`; anything that would need a question is denied
   (`permissionPrompts: none`) — OpenCode cannot relay Claude Code's prompts.
 - **Images:** streaming input is always on (base64/data URLs; remote URLs are not supported
@@ -99,7 +100,7 @@ Three layers, each over the previous one (`src/settings.js`):
    scheduling/cloud, code review: ~12k tokens of every turn).
 2. **The machine**: the provider `settings` in `opencode.jsonc`.
 3. **The project**: `.opencode/opencode-claude-code-provider.json` in the repository, searched upward from the
-   window's directory (the same way opencode-peers finds `.opencode/nova-peers.json`).
+   window's directory.
 
 **Skills**: `skills: { "name": false }`, like `tools`. Claude Code puts the listing of every skill into
 each session (measured in nova-opencode: 51 skills, ~33k characters). The defaults leave out the
@@ -157,7 +158,8 @@ logged.
 
 ```jsonc
 // <repository>/.opencode/opencode-claude-code-provider.json -- this project only
-{ "autoCompactWindow": { "haiku": 120000 }, "tools": { "Workflow": true } }
+{ "autoCompactWindow": { "haiku": 120000 }, "tools": { "Workflow": true },
+  "claudeConfigDir": "D:/Sources/.claude-accounts/4px" }  // this project's Claude account
 ```
 
 `autoCompactWindow` keys are the model names OpenCode sends (the keys of `models` in the provider

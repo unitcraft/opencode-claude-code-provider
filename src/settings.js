@@ -41,7 +41,7 @@ export const DEFAULTS = Object.freeze({
   toolInputMax: 300,
 })
 
-const KEYS = ["language", "autoCompactWindow", "tools", "skills", "timeStamp", "toolInputMax"]
+const KEYS = ["language", "autoCompactWindow", "tools", "skills", "timeStamp", "toolInputMax", "claudeConfigDir"]
 const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v)
 const normalize = (key, v) => (key === "autoCompactWindow" && typeof v === "number" ? { "*": v } : v)
 

@@ -220,3 +220,21 @@ The following is a summary...
   // only a checkpoint (nothing new): nothing of it goes as the user's word
   assert.ok(!JSON.stringify(newUserTurn([{ role: "system", content: "s" }, checkpoint])).includes("conversation-checkpoint"))
 })
+
+test("resumeFor: a session is resumed only under the account it was started with", async () => {
+  const { resumeFor, accountKey } = await import("../src/lib.js")
+  const s = { ses1: "cc-1", [accountKey("ses1")]: "D:/acc/nv-lang", old: "cc-0" }
+  assert.equal(resumeFor(s, "ses1", "D:/acc/nv-lang"), "cc-1")
+  assert.equal(resumeFor(s, "ses1", "D:/acc/other"), undefined) // another account: a new session, not an error
+  assert.equal(resumeFor(s, "old", "D:/acc/any"), "cc-0") // entries saved before accounts were recorded: resumed
+  assert.equal(resumeFor(s, "none", "D:/acc/nv-lang"), undefined)
+})
+
+test("claudeConfigDir: the project's file overrides the provider options", async () => {
+  const { settingsFor } = await import("../src/settings.js")
+  const dir = mkdtempSync(path.join(os.tmpdir(), "ccp-acc-"))
+  mkdirSync(path.join(dir, ".opencode"), { recursive: true })
+  writeFileSync(path.join(dir, ".opencode", "opencode-claude-code-provider.json"), JSON.stringify({ claudeConfigDir: "D:/acc/project" }))
+  assert.equal(settingsFor({ claudeConfigDir: "D:/acc/global" }, dir).claudeConfigDir, "D:/acc/project")
+  assert.equal(settingsFor({ claudeConfigDir: "D:/acc/global" }, os.tmpdir()).claudeConfigDir, "D:/acc/global")
+})

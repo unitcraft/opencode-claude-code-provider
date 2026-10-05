@@ -36,7 +36,7 @@ import { DEFAULTS, explicitSettingsFor, settingsFor, toolSources, switchSources 
 import { opencodeWindow } from "./opencode-window.js"
 import { isToolsCommand, discoverClaude, contextUsage, toolsReport } from "./tools-report.js"
 import { watchOpenCode, openCodeVersion, installedOpenCodeVersion, readCheckState, toast, CHECK_WARNING } from "./opencode-check.js"
-import { sessionDirectory, loadSessionMap, saveSessionMap, resolvePeersMcp, peersMcpServer, isHelperRequest, helperSettings, isCompactionRequest, autoCompactWindowFor, disabledTools, enabledSkills, TIME_HINT, timeStamper, hhmm, rawUserTurn, newUserTurn, lastCallUsage, shortenToolInput, mainModelUsage, textResult, textStream } from "./lib.js"
+import { accountKey, resumeFor, sessionDirectory, loadSessionMap, saveSessionMap, resolvePeersMcp, peersMcpServer, isHelperRequest, helperSettings, isCompactionRequest, autoCompactWindowFor, disabledTools, enabledSkills, TIME_HINT, timeStamper, hhmm, rawUserTurn, newUserTurn, lastCallUsage, shortenToolInput, mainModelUsage, textResult, textStream } from "./lib.js"
 
 const BASE_SETTINGS = {
   systemPrompt: { type: "preset", preset: "claude_code" },
@@ -119,10 +119,12 @@ export function createClaudeCode(options = {}) {
   // built-in tools switched off (both from the provider options).
   const claudeSettings = (modelId, cfg, cwd) => {
     const threshold = thresholdFor(modelId, cwd)
+    // the window's Claude account: claudeConfigDir of the project's file, else of opencode.jsonc (plan 001, Ph.2)
+    const account = cfg.claudeConfigDir || configDir
     // `tools: { "Artifact": false, ... }` -- a tool set to false is removed from Claude Code's context
     const disabled = disabledTools(cfg.tools, userSettings.disallowedTools)
     return {
-      ...(threshold ? { env: { ...(userSettings.env ?? process.env), CLAUDE_CODE_AUTO_COMPACT_WINDOW: String(threshold) } } : {}),
+      env: { ...(userSettings.env ?? process.env), ...(account ? { CLAUDE_CONFIG_DIR: account } : {}), ...(threshold ? { CLAUDE_CODE_AUTO_COMPACT_WINDOW: String(threshold) } : {}) },
       ...(disabled.length ? { disallowedTools: disabled } : {}),
     }
   }
@@ -148,7 +150,7 @@ export function createClaudeCode(options = {}) {
       const t = texts(cfg.language)
       const limits = { model: modelNames.get(ocSession) ?? modelId, threshold: thresholdFor(modelId, cwd), contextWindow: contextWindows.get(ocSession) }
       const answer = (line) => (kind === "generate" ? textResult : textStream)(compactionAnswer(cfg.language, line, limits))
-      const resume = ocSession ? sessions[ocSession] : undefined
+      const resume = resumeFor(sessions, ocSession, cfg.claudeConfigDir || configDir)
       if (!resume) return answer(t.compactNothing)
       if (!cwd) return answer(t.compactFailed("unknown directory"))
       // the end of Claude Code's compaction and its numbers come as the SDK message compact_boundary
@@ -246,8 +248,9 @@ export function createClaudeCode(options = {}) {
             "refusing to run Claude Code in an unknown directory",
         )
       }
-      const resume = sessions[ocSession]
       const cfg = settingsFor(options, cwd, log) // defaults < provider options < the project's file
+      const account = cfg.claudeConfigDir || configDir
+      const resume = resumeFor(sessions, ocSession, account) // a session of another account starts anew
       // Claude Code compacting its context shows in the window (it can take a while).
       const notes = noteChannel()
       if (check && !check.ok && !warned.has(`${check.version}:${ocSession}:${hour()}`)) {
@@ -279,8 +282,9 @@ export function createClaudeCode(options = {}) {
         if (main) modelNames.set(ocSession, main.name)
       }
       const remember = (id) => {
-        if (id && sessions[ocSession] !== id) {
+        if (id && (sessions[ocSession] !== id || sessions[accountKey(ocSession)] !== (account ?? ""))) {
           sessions[ocSession] = id
+          sessions[accountKey(ocSession)] = account ?? ""
           saveSessionMap(sessions)
         }
       }
