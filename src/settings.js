@@ -87,6 +87,12 @@ export function settingsFor(options, dir, log = () => {}) {
   return mergeSettings(DEFAULTS, options, project?.settings)
 }
 
+/** Settings set explicitly (the machine's options and the project's file, no defaults): to tell a chosen value from a default. */
+export function explicitSettingsFor(options, dir) {
+  const project = dir ? findProjectSettings(dir) : undefined
+  return mergeSettings(options, project?.error ? undefined : project?.settings)
+}
+
 /** For every tool (key "tools") or skill (key "skills") a layer mentions: on/off and the deciding layer. */
 export function switchSources(key, options, dir) {
   const project = dir ? findProjectSettings(dir) : undefined

@@ -122,6 +122,16 @@ fill the screen); `0` shows everything. Display only: Claude Code executes the t
 **Context size**: Claude Code makes several model calls in one turn; the window shows the input of
 the last one (the real context), not the sum over the turn. It updates when the turn ends.
 
+**One compaction threshold for OpenCode and Claude Code**: OpenCode compacts at
+`limit.context − compaction.reserved` of the model (measured on 2.0.22) and shows the context as a
+percentage of `limit.context`. Unless `autoCompactWindow` is set explicitly (provider options or the
+project file), the provider gives Claude Code that same threshold, read from OpenCode's config: the
+global `opencode.jsonc` and `opencode.json(c)` / `.opencode/opencode.json(c)` upward from the tab's
+directory (a folder above the project's repositories counts). So both compact at one point and the
+percentage means "how far to compaction". Example: `"compaction": { "reserved": 20000 }` and
+`"limit": { "context": 520000, "output": 64000 }` → compaction at 500K. See
+[plan 001](doc/plans/001-window-and-account.md).
+
 **What is on in a window**: type `/cc-tools` as the whole message. The provider answers itself, no
 model call: every tool Claude Code offers there (built-in and MCP), on or off, and which layer
 decided (provider default, `opencode.jsonc`, project file, Claude Code), plus the context estimate.

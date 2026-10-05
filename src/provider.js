@@ -32,7 +32,8 @@ import { appendFileSync } from "node:fs"
 import path from "node:path"
 import { noteChannel, compactionWatch } from "./notes.js"
 import { texts, compactionAnswer } from "./texts.js"
-import { settingsFor, toolSources, switchSources } from "./settings.js"
+import { DEFAULTS, explicitSettingsFor, settingsFor, toolSources, switchSources } from "./settings.js"
+import { opencodeWindow } from "./opencode-window.js"
 import { isToolsCommand, discoverClaude, contextUsage, toolsReport } from "./tools-report.js"
 import { watchOpenCode, openCodeVersion, installedOpenCodeVersion, readCheckState, toast, CHECK_WARNING } from "./opencode-check.js"
 import { sessionDirectory, loadSessionMap, saveSessionMap, resolvePeersMcp, peersMcpServer, isHelperRequest, helperSettings, isCompactionRequest, autoCompactWindowFor, disabledTools, enabledSkills, TIME_HINT, timeStamper, hhmm, rawUserTurn, newUserTurn, lastCallUsage, shortenToolInput, mainModelUsage, textResult, textStream } from "./lib.js"
@@ -106,10 +107,18 @@ export function createClaudeCode(options = {}) {
     }
   }, 3_600_000).unref?.()
   }
+  // The auto-compaction threshold of this model for a tab in cwd (plan 001, decision 4): an explicit
+  // autoCompactWindow (provider options, the project's file) wins; else OpenCode's own window for the model
+  // (limit.context - compaction.reserved from OpenCode's config: one source, both compact at the same point);
+  // else the provider's default.
+  const thresholdFor = (modelId, cwd) =>
+    autoCompactWindowFor(explicitSettingsFor(options, cwd).autoCompactWindow, modelId) ??
+    opencodeWindow(cwd, modelId).threshold ??
+    autoCompactWindowFor(DEFAULTS.autoCompactWindow, modelId)
   // Claude Code's own settings per request: the auto-compaction threshold of this model and the
   // built-in tools switched off (both from the provider options).
-  const claudeSettings = (modelId, cfg) => {
-    const threshold = autoCompactWindowFor(cfg.autoCompactWindow, modelId)
+  const claudeSettings = (modelId, cfg, cwd) => {
+    const threshold = thresholdFor(modelId, cwd)
     // `tools: { "Artifact": false, ... }` -- a tool set to false is removed from Claude Code's context
     const disabled = disabledTools(cfg.tools, userSettings.disallowedTools)
     return {
@@ -137,7 +146,7 @@ export function createClaudeCode(options = {}) {
       const cwd = ocSession ? await sessionDirectory(ocSession) : undefined
       const cfg = settingsFor(options, cwd, log)
       const t = texts(cfg.language)
-      const limits = { model: modelNames.get(ocSession) ?? modelId, threshold: autoCompactWindowFor(cfg.autoCompactWindow, modelId), contextWindow: contextWindows.get(ocSession) }
+      const limits = { model: modelNames.get(ocSession) ?? modelId, threshold: thresholdFor(modelId, cwd), contextWindow: contextWindows.get(ocSession) }
       const answer = (line) => (kind === "generate" ? textResult : textStream)(compactionAnswer(cfg.language, line, limits))
       const resume = ocSession ? sessions[ocSession] : undefined
       if (!resume) return answer(t.compactNothing)
@@ -151,7 +160,7 @@ export function createClaudeCode(options = {}) {
       const started = Date.now()
       try {
         const inner = createBase({
-          defaultSettings: { ...BASE_SETTINGS, ...userSettings, ...claudeSettings(modelId, cfg), ...peersSettings(ocSession), onSdkMessage, cwd, resume },
+          defaultSettings: { ...BASE_SETTINGS, ...userSettings, ...claudeSettings(modelId, cfg, cwd), ...peersSettings(ocSession), onSdkMessage, cwd, resume },
         }).languageModel(modelId)
         // raw "/compact" (a system-role message goes in without the package's "Human: " prefix)
         await inner.doGenerate({ ...callOptions, prompt: [{ role: "system", content: "/compact" }], tools: undefined, toolChoice: undefined })
@@ -166,7 +175,7 @@ export function createClaudeCode(options = {}) {
 
     // Agent SDK options of a window for the interrupted discovery turn and the context estimate.
     const sdkOptions = (cfg, ocSession, cwd, disallowedTools) => {
-      const c = claudeSettings(modelId, cfg)
+      const c = claudeSettings(modelId, cfg, cwd)
       const peers = peersSettings(ocSession)
       return {
         model: modelId,
@@ -258,7 +267,7 @@ export function createClaudeCode(options = {}) {
       const timeHint = cfg.timeStamp ? { systemPrompt: { type: "preset", preset: "claude_code", append: TIME_HINT } } : {}
       const stamp = cfg.timeStamp ? timeStamper() : (part) => part
       const inner = createBase({
-        defaultSettings: { ...BASE_SETTINGS, ...userSettings, ...timeHint, ...claudeSettings(modelId, cfg), ...peersSettings(ocSession), ...(skills ? { skills } : {}), hooks: watch.hooks, onSdkMessage: watch.onSdkMessage, cwd, ...(resume ? { resume } : {}) },
+        defaultSettings: { ...BASE_SETTINGS, ...userSettings, ...timeHint, ...claudeSettings(modelId, cfg, cwd), ...peersSettings(ocSession), ...(skills ? { skills } : {}), hooks: watch.hooks, onSdkMessage: watch.onSdkMessage, cwd, ...(resume ? { resume } : {}) },
       }).languageModel(modelId)
       // The user's text goes to Claude Code as typed (no "Human: " prefix of the package).
       const prompt = rawUserTurn(resume ? newUserTurn(callOptions.prompt) : callOptions.prompt.filter((m) => m.role !== "system"))
