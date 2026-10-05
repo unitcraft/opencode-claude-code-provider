@@ -35,7 +35,7 @@ import { texts, compactionAnswer } from "./texts.js"
 import { settingsFor, toolSources, switchSources } from "./settings.js"
 import { isToolsCommand, discoverClaude, contextUsage, toolsReport } from "./tools-report.js"
 import { watchOpenCode, openCodeVersion, installedOpenCodeVersion, readCheckState, toast, CHECK_WARNING } from "./opencode-check.js"
-import { sessionDirectory, loadSessionMap, saveSessionMap, resolvePeersMcp, peersMcpServer, isHelperRequest, helperSettings, isCompactionRequest, autoCompactWindowFor, disabledTools, enabledSkills, TIME_HINT, timeStamper, hhmm, rawUserTurn, newUserTurn, lastCallUsage, shortenToolInput, textResult, textStream } from "./lib.js"
+import { sessionDirectory, loadSessionMap, saveSessionMap, resolvePeersMcp, peersMcpServer, isHelperRequest, helperSettings, isCompactionRequest, autoCompactWindowFor, disabledTools, enabledSkills, TIME_HINT, timeStamper, hhmm, rawUserTurn, newUserTurn, lastCallUsage, shortenToolInput, mainModelUsage, textResult, textStream } from "./lib.js"
 
 const BASE_SETTINGS = {
   systemPrompt: { type: "preset", preset: "claude_code" },
@@ -265,9 +265,9 @@ export function createClaudeCode(options = {}) {
       const opts = { ...callOptions, prompt, tools: undefined, toolChoice: undefined }
 
       const noteWindow = (meta) => {
-        const [real, u] = Object.entries(meta?.["claude-code"]?.modelUsage ?? {}).find(([, u]) => u?.contextWindow) ?? []
-        if (u) contextWindows.set(ocSession, u.contextWindow)
-        if (real) modelNames.set(ocSession, real)
+        const main = mainModelUsage(meta?.["claude-code"]?.modelUsage, modelId) // not the helper model Claude Code also calls
+        if (main) contextWindows.set(ocSession, main.contextWindow)
+        if (main) modelNames.set(ocSession, main.name)
       }
       const remember = (id) => {
         if (id && sessions[ocSession] !== id) {

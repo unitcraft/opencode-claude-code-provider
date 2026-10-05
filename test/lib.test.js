@@ -6,7 +6,7 @@ import path from "node:path"
 import { DatabaseSync } from "node:sqlite"
 import { test } from "node:test"
 import { compactionAnswer, texts } from "../src/texts.js"
-import { autoCompactWindowFor, disabledTools, helperSettings, lastCallUsage, newUserTurn, rawUserTurn, shortenToolInput, isCompactionRequest, isHelperRequest, loadSessionMap, peersMcpServer, resolvePeersMcp, saveSessionMap, sessionDirectory } from "../src/lib.js"
+import { autoCompactWindowFor, disabledTools, helperSettings, lastCallUsage, mainModelUsage, newUserTurn, rawUserTurn, shortenToolInput, isCompactionRequest, isHelperRequest, loadSessionMap, peersMcpServer, resolvePeersMcp, saveSessionMap, sessionDirectory } from "../src/lib.js"
 
 function fakeOpencode() {
   const data = mkdtempSync(path.join(os.tmpdir(), "occ-"))
@@ -193,4 +193,30 @@ test("shortenToolInput: long string values are cut for display", () => {
   assert.equal(out.list[0].length, 300 + "…(+700)".length)
   assert.equal(shortenToolInput(JSON.stringify({ command: long }), 0), JSON.stringify({ command: long })) // 0 = whole input
   assert.deepEqual(shortenToolInput({ a: long }, 10), { a: "x".repeat(10) + "…(+990)" }) // an object stays an object
+})
+
+test("mainModelUsage: the window's model, not Claude Code's helper model", () => {
+  const usage = {
+    "claude-haiku-4-5-20251001": { contextWindow: 200000, inputTokens: 900, outputTokens: 50 }, // chores, listed first
+    "claude-opus-4-6": { contextWindow: 1000000, inputTokens: 20, cacheReadInputTokens: 40000, outputTokens: 600 },
+  }
+  assert.deepEqual(mainModelUsage(usage, "opus"), { name: "claude-opus-4-6", contextWindow: 1000000 })
+  assert.deepEqual(mainModelUsage(usage, "some-alias"), { name: "claude-opus-4-6", contextWindow: 1000000 }) // no alias match: the most tokens
+  assert.deepEqual(mainModelUsage(usage, "haiku"), { name: "claude-haiku-4-5-20251001", contextWindow: 200000 })
+  assert.equal(mainModelUsage({}, "opus"), undefined)
+})
+
+test("newUserTurn: OpenCode's compaction checkpoint is not passed to Claude Code (it has its own memory)", () => {
+  const u = (text) => ({ role: "user", content: [{ type: "text", text }] })
+  const a = { role: "assistant", content: [{ type: "text", text: "old" }] }
+  const checkpoint = u(`<conversation-checkpoint>
+The following is a summary...
+<summary>
+## Objective
+- /compact: ...</summary>`)
+  // recorded request after a compaction: system, the checkpoint, the owner's message
+  assert.deepEqual(newUserTurn([{ role: "system", content: "s" }, checkpoint, u("1 — да, влей")]), [u("1 — да, влей")])
+  assert.deepEqual(newUserTurn([a, checkpoint, u("ответ")]), [u("ответ")])
+  // only a checkpoint (nothing new): nothing of it goes as the user's word
+  assert.ok(!JSON.stringify(newUserTurn([{ role: "system", content: "s" }, checkpoint])).includes("conversation-checkpoint"))
 })

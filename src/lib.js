@@ -178,12 +178,20 @@ export function autoCompactWindowFor(option, modelId) {
 export function newUserTurn(prompt) {
   let i = prompt.length
   while (i > 0 && prompt[i - 1].role === "user") i--
-  const tail = prompt.slice(i)
-  if (!tail.length) return prompt.filter((m) => m.role !== "system")
+  // After a compaction OpenCode sends its summary as a user message "<conversation-checkpoint> ... <summary>" right
+  // before the user's message (recorded 2026-10-05). Claude Code keeps its own memory, so the checkpoint is dropped:
+  // merged in, it made the user's own message look like part of an automatic summary, and the model rightly did not
+  // take the owner's approval in it as the owner's word.
+  const tail = prompt.slice(i).filter((m) => !isCheckpoint(m))
+  if (!tail.length) return prompt.filter((m) => m.role !== "system" && !isCheckpoint(m))
   if (tail.length === 1) return tail
   const parts = tail.flatMap((m) => (typeof m.content === "string" ? [{ type: "text", text: m.content }] : m.content ?? []))
   return [{ ...tail[tail.length - 1], content: parts }]
 }
+
+const textOf = (m) => (typeof m?.content === "string" ? m.content : (m?.content ?? []).map((p) => p?.text ?? "").join(""))
+/** OpenCode's compaction summary as it comes in the next request. */
+export const isCheckpoint = (m) => m?.role === "user" && textOf(m).trimStart().startsWith("<conversation-checkpoint>")
 
 /**
  * The newest user message as Claude Code's raw input. The package prefixes every user message with
@@ -242,6 +250,23 @@ export function shortenToolInput(input, max) {
   } catch {
     return cut(input)
   }
+}
+
+/**
+ * The main model of a turn from Claude Code's modelUsage ({"claude-opus-...": {contextWindow, inputTokens, ...}}).
+ * Claude Code also calls a small model for its own chores (Haiku), so "the first entry with a window" was wrong:
+ * an Opus window got the compaction note "claude-haiku-4-5 window 200k" (seen 2026-10-05). The main one is the
+ * entry whose name has the window's model alias (opus / sonnet / haiku), else the one with the most tokens.
+ */
+export function mainModelUsage(modelUsage, modelId) {
+  const entries = Object.entries(modelUsage ?? {}).filter(([, u]) => u && u.contextWindow)
+  if (!entries.length) return undefined
+  const alias = String(modelId ?? "").toLowerCase().match(/opus|sonnet|haiku/)?.[0]
+  const byName = alias ? entries.filter(([name]) => name.toLowerCase().includes(alias)) : []
+  const tokens = ([, u]) => (u.inputTokens ?? 0) + (u.cacheReadInputTokens ?? 0) + (u.cacheCreationInputTokens ?? 0) + (u.outputTokens ?? 0)
+  const pool = byName.length ? byName : entries
+  const [name, u] = pool.reduce((a, b) => (tokens(b) > tokens(a) ? b : a))
+  return { name, contextWindow: u.contextWindow }
 }
 
 /** A finished text answer without calling the model: for doGenerate (v3 result). */
