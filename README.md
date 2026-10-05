@@ -115,6 +115,13 @@ constant line to Claude Code's system prompt telling the model not to write the 
 none, so without this Claude ran `date` on every message). Off by default. The system-prompt line
 reaches new sessions (Claude Code records a session's system prompt); the stamp works at once.
 
+**Tool calls in the window**: `toolInputMax` (default 300) -- Claude Code's tool calls are shown with
+long string values cut to that many characters and "…(+N)" (a file written by one command used to
+fill the screen); `0` shows everything. Display only: Claude Code executes the tools.
+
+**Context size**: Claude Code makes several model calls in one turn; the window shows the input of
+the last one (the real context), not the sum over the turn. It updates when the turn ends.
+
 **What is on in a window**: type `/cc-tools` as the whole message. The provider answers itself, no
 model call: every tool Claude Code offers there (built-in and MCP), on or off, and which layer
 decided (provider default, `opencode.jsonc`, project file, Claude Code), plus the context estimate.
