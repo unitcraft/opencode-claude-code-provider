@@ -22,6 +22,9 @@ Nothing is spoofed: Claude Code runs under your own Claude login, exactly as in 
   option, else the server's `CLAUDE_CONFIG_DIR`) is passed to Claude Code, so the account does not depend on how
   the OpenCode service was started, and one service serves projects with different accounts. A Claude Code
   session is resumed only under the account it started with; after a change of account the window starts anew.
+- **The tab is known to hooks.** `OPENCODE_SESSION_ID` (the OpenCode session id) is in Claude Code's environment,
+  so the repository's hooks know which tab they serve -- e.g. a `Stop` hook reads that session's opencode-peers
+  status file ([plan 003](doc/plans/003-session-env.md)).
 - **Permissions:** `permissionMode: auto`; anything that would need a question is denied
   (`permissionPrompts: none`) — OpenCode cannot relay Claude Code's prompts.
 - **Images:** streaming input is always on (base64/data URLs; remote URLs are not supported

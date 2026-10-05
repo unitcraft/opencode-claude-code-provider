@@ -37,7 +37,7 @@ import { opencodeWindow } from "./opencode-window.js"
 import { spawnClaudeCode } from "./spawn.js"
 import { isToolsCommand, discoverClaude, contextUsage, toolsReport } from "./tools-report.js"
 import { watchOpenCode, openCodeVersion, installedOpenCodeVersion, readCheckState, toast, CHECK_WARNING } from "./opencode-check.js"
-import { accountKey, resumeFor, sessionDirectory, loadSessionMap, saveSessionMap, resolvePeersMcp, peersMcpServer, isHelperRequest, helperSettings, isCompactionRequest, autoCompactWindowFor, disabledTools, enabledSkills, TIME_HINT, backgroundHint, backgroundWatch, timeStamper, hhmm, rawUserTurn, newUserTurn, lastCallUsage, shortenToolInput, mainModelUsage, textResult, textStream } from "./lib.js"
+import { accountKey, resumeFor, sessionDirectory, loadSessionMap, saveSessionMap, resolvePeersMcp, peersMcpServer, isHelperRequest, helperSettings, isCompactionRequest, autoCompactWindowFor, disabledTools, enabledSkills, TIME_HINT, claudeEnv, backgroundHint, backgroundWatch, timeStamper, hhmm, rawUserTurn, newUserTurn, lastCallUsage, shortenToolInput, mainModelUsage, textResult, textStream } from "./lib.js"
 
 const BASE_SETTINGS = {
   systemPrompt: { type: "preset", preset: "claude_code" },
@@ -120,14 +120,14 @@ export function createClaudeCode(options = {}) {
   // built-in tools switched off (both from the provider options).
   // Claude Code's process of a window's turn: the empty result of a task-notification turn dropped (src/spawn.js)
   const spawnFiltered = (o) => spawnClaudeCode(o, log)
-  const claudeSettings = (modelId, cfg, cwd) => {
+  const claudeSettings = (modelId, cfg, cwd, ocSession) => {
     const threshold = thresholdFor(modelId, cwd)
     // the window's Claude account: claudeConfigDir of the project's file, else of opencode.jsonc (plan 001, Ph.2)
     const account = cfg.claudeConfigDir || configDir
     // `tools: { "Artifact": false, ... }` -- a tool set to false is removed from Claude Code's context
     const disabled = disabledTools(cfg.tools, userSettings.disallowedTools)
     return {
-      env: { ...(userSettings.env ?? process.env), ...(account ? { CLAUDE_CONFIG_DIR: account } : {}), ...(threshold ? { CLAUDE_CODE_AUTO_COMPACT_WINDOW: String(threshold) } : {}) },
+      env: claudeEnv(userSettings.env ?? process.env, { account, threshold, session: ocSession }),
       ...(disabled.length ? { disallowedTools: disabled } : {}),
     }
   }
@@ -165,7 +165,7 @@ export function createClaudeCode(options = {}) {
       const started = Date.now()
       try {
         const inner = createBase({
-          defaultSettings: { ...BASE_SETTINGS, ...userSettings, ...claudeSettings(modelId, cfg, cwd), ...peersSettings(ocSession), onSdkMessage, cwd, resume, spawnClaudeCodeProcess: spawnFiltered },
+          defaultSettings: { ...BASE_SETTINGS, ...userSettings, ...claudeSettings(modelId, cfg, cwd, ocSession), ...peersSettings(ocSession), onSdkMessage, cwd, resume, spawnClaudeCodeProcess: spawnFiltered },
         }).languageModel(modelId)
         // raw "/compact" (a system-role message goes in without the package's "Human: " prefix)
         await inner.doGenerate({ ...callOptions, prompt: [{ role: "system", content: "/compact" }], tools: undefined, toolChoice: undefined })
@@ -180,7 +180,7 @@ export function createClaudeCode(options = {}) {
 
     // Agent SDK options of a window for the interrupted discovery turn and the context estimate.
     const sdkOptions = (cfg, ocSession, cwd, disallowedTools) => {
-      const c = claudeSettings(modelId, cfg, cwd)
+      const c = claudeSettings(modelId, cfg, cwd, ocSession)
       const peers = peersSettings(ocSession)
       return {
         model: modelId,
@@ -280,7 +280,7 @@ export function createClaudeCode(options = {}) {
       const timeHint = { systemPrompt: { type: "preset", preset: "claude_code", append } }
       const stamp = cfg.timeStamp ? timeStamper() : (part) => part
       const inner = createBase({
-        defaultSettings: { ...BASE_SETTINGS, ...userSettings, ...timeHint, ...claudeSettings(modelId, cfg, cwd), ...peersSettings(ocSession), ...(skills ? { skills } : {}), hooks: watch.hooks, onSdkMessage: watch.onSdkMessage, cwd, ...(resume ? { resume } : {}), spawnClaudeCodeProcess: spawnFiltered },
+        defaultSettings: { ...BASE_SETTINGS, ...userSettings, ...timeHint, ...claudeSettings(modelId, cfg, cwd, ocSession), ...peersSettings(ocSession), ...(skills ? { skills } : {}), hooks: watch.hooks, onSdkMessage: watch.onSdkMessage, cwd, ...(resume ? { resume } : {}), spawnClaudeCodeProcess: spawnFiltered },
       }).languageModel(modelId)
       // The user's text goes to Claude Code as typed (no "Human: " prefix of the package).
       const prompt = rawUserTurn(resume ? newUserTurn(callOptions.prompt) : callOptions.prompt.filter((m) => m.role !== "system"))

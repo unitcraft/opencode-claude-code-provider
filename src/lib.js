@@ -323,6 +323,18 @@ export function enabledSkills(discovered, skills) {
   return discovered.filter((name) => !off.has(name))
 }
 
+/**
+ * Claude Code's environment for a window's turn: the account (CLAUDE_CONFIG_DIR), the compaction threshold, and
+ * OPENCODE_SESSION_ID (plan 003) -- so the repository's hooks know which OpenCode tab they serve (a Stop hook can read
+ * that session's opencode-peers status file).
+ */
+export const claudeEnv = (base, { account, threshold, session } = {}) => ({
+  ...base,
+  ...(account ? { CLAUDE_CONFIG_DIR: account } : {}),
+  ...(threshold ? { CLAUDE_CODE_AUTO_COMPACT_WINDOW: String(threshold) } : {}),
+  ...(session ? { OPENCODE_SESSION_ID: session } : {}),
+})
+
 /** Local time HH:MM. */
 export const hhmm = (d = new Date()) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`
 

@@ -6,7 +6,7 @@ import path from "node:path"
 import { DatabaseSync } from "node:sqlite"
 import { test } from "node:test"
 import { compactionAnswer, texts } from "../src/texts.js"
-import { backgroundHint, backgroundWatch, autoCompactWindowFor, disabledTools, helperSettings, lastCallUsage, mainModelUsage, newUserTurn, rawUserTurn, shortenToolInput, isCompactionRequest, isHelperRequest, loadSessionMap, peersMcpServer, resolvePeersMcp, saveSessionMap, sessionDirectory } from "../src/lib.js"
+import { claudeEnv, backgroundHint, backgroundWatch, autoCompactWindowFor, disabledTools, helperSettings, lastCallUsage, mainModelUsage, newUserTurn, rawUserTurn, shortenToolInput, isCompactionRequest, isHelperRequest, loadSessionMap, peersMcpServer, resolvePeersMcp, saveSessionMap, sessionDirectory } from "../src/lib.js"
 
 function fakeOpencode() {
   const data = mkdtempSync(path.join(os.tmpdir(), "occ-"))
@@ -248,4 +248,10 @@ test("backgroundWatch: the live set is the last background_tasks_changed, ambien
   assert.deepEqual(b.live(), [])
   assert.match(backgroundHint(true), /peer_watch/)
   assert.doesNotMatch(backgroundHint(false), /peer_watch/)
+})
+
+test("claudeEnv: account, threshold and the OpenCode session for the repository's hooks (plan 003)", () => {
+  const env = claudeEnv({ PATH: "p" }, { account: "D:/acc", threshold: 500000, session: "ses_abc" })
+  assert.deepEqual(env, { PATH: "p", CLAUDE_CONFIG_DIR: "D:/acc", CLAUDE_CODE_AUTO_COMPACT_WINDOW: "500000", OPENCODE_SESSION_ID: "ses_abc" })
+  assert.deepEqual(claudeEnv({ PATH: "p" }, {}), { PATH: "p" })
 })
