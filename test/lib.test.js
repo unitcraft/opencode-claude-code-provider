@@ -6,7 +6,7 @@ import path from "node:path"
 import { DatabaseSync } from "node:sqlite"
 import { test } from "node:test"
 import { compactionAnswer, texts } from "../src/texts.js"
-import { autoCompactWindowFor, disabledTools, helperSettings, rawUserTurn, isCompactionRequest, isHelperRequest, loadSessionMap, peersMcpServer, resolvePeersMcp, saveSessionMap, sessionDirectory } from "../src/lib.js"
+import { autoCompactWindowFor, disabledTools, helperSettings, newUserTurn, rawUserTurn, isCompactionRequest, isHelperRequest, loadSessionMap, peersMcpServer, resolvePeersMcp, saveSessionMap, sessionDirectory } from "../src/lib.js"
 
 function fakeOpencode() {
   const data = mkdtempSync(path.join(os.tmpdir(), "occ-"))
@@ -153,4 +153,20 @@ test("the user's text goes as typed: a text-only message becomes raw input, file
   assert.equal(rawUserTurn(withImage), withImage)
   const history = [{ role: "user", content: "a" }, { role: "assistant", content: "b" }, { role: "user", content: "c" }]
   assert.equal(rawUserTurn(history), history) // a whole history (no resume) keeps its roles
+})
+
+test("newUserTurn: everything the user side queued since the last answer, merged", () => {
+  const u = (text) => ({ role: "user", content: [{ type: "text", text }] })
+  const a = { role: "assistant", content: [{ type: "text", text: "old answer" }] }
+  assert.deepEqual(newUserTurn([{ role: "system", content: "s" }, u("q1"), a, u("hi")]), [u("hi")])
+  // a letter queued with session.synthetic comes right before the user's message: both reach Claude Code
+  assert.deepEqual(newUserTurn([u("q1"), a, u("letter"), u("hi")]), [{ role: "user", content: [{ type: "text", text: "letter" }, { type: "text", text: "hi" }] }])
+  assert.deepEqual(rawUserTurn(newUserTurn([u("q1"), a, u("letter"), { role: "user", content: "hi" }])), [{ role: "system", content: ["letter", "hi"].join(String.fromCharCode(10)) }])
+  // an image stays attached to the merged user message
+  const img = { role: "user", content: [{ type: "file", mediaType: "image/png", data: "x" }, { type: "text", text: "look" }] }
+  const merged = newUserTurn([a, u("letter"), img])
+  assert.equal(merged.length, 1)
+  assert.equal(merged[0].content.length, 3)
+  // no user message at the end: the history without system messages
+  assert.deepEqual(newUserTurn([{ role: "system", content: "s" }, a]), [a])
 })

@@ -35,7 +35,7 @@ import { texts, compactionAnswer } from "./texts.js"
 import { settingsFor, toolSources, switchSources } from "./settings.js"
 import { isToolsCommand, discoverClaude, contextUsage, toolsReport } from "./tools-report.js"
 import { watchOpenCode, openCodeVersion, installedOpenCodeVersion, readCheckState, toast, CHECK_WARNING } from "./opencode-check.js"
-import { sessionDirectory, loadSessionMap, saveSessionMap, resolvePeersMcp, peersMcpServer, isHelperRequest, helperSettings, isCompactionRequest, autoCompactWindowFor, disabledTools, enabledSkills, TIME_HINT, timeStamper, hhmm, rawUserTurn, textResult, textStream } from "./lib.js"
+import { sessionDirectory, loadSessionMap, saveSessionMap, resolvePeersMcp, peersMcpServer, isHelperRequest, helperSettings, isCompactionRequest, autoCompactWindowFor, disabledTools, enabledSkills, TIME_HINT, timeStamper, hhmm, rawUserTurn, newUserTurn, textResult, textStream } from "./lib.js"
 
 const BASE_SETTINGS = {
   systemPrompt: { type: "preset", preset: "claude_code" },
@@ -72,12 +72,6 @@ function recordRequest(file, kind, o) {
 function sessionIdOf(options) {
   const h = options?.headers ?? {}
   return h["x-opencode-session-id"] ?? h["x-opencode-session"] ?? h["X-Session-Id"]
-}
-
-/** Only the newest user message (resumed session: Claude Code already has the rest). */
-function lastUserTurn(prompt) {
-  for (let i = prompt.length - 1; i >= 0; i--) if (prompt[i].role === "user") return [prompt[i]]
-  return prompt.filter((m) => m.role !== "system")
 }
 
 function claudeSessionFrom(part) {
@@ -260,7 +254,7 @@ export function createClaudeCode(options = {}) {
         defaultSettings: { ...BASE_SETTINGS, ...userSettings, ...timeHint, ...claudeSettings(modelId, cfg), ...peersSettings(ocSession), ...(skills ? { skills } : {}), hooks: watch.hooks, onSdkMessage: watch.onSdkMessage, cwd, ...(resume ? { resume } : {}) },
       }).languageModel(modelId)
       // The user's text goes to Claude Code as typed (no "Human: " prefix of the package).
-      const prompt = rawUserTurn(resume ? lastUserTurn(callOptions.prompt) : callOptions.prompt.filter((m) => m.role !== "system"))
+      const prompt = rawUserTurn(resume ? newUserTurn(callOptions.prompt) : callOptions.prompt.filter((m) => m.role !== "system"))
       const opts = { ...callOptions, prompt, tools: undefined, toolChoice: undefined }
 
       const noteWindow = (meta) => {

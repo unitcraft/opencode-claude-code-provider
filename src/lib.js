@@ -169,6 +169,23 @@ export function autoCompactWindowFor(option, modelId) {
 }
 
 /**
+ * What is new since the model's last answer, for a resumed session (Claude Code already has the rest): every
+ * user message after the last assistant/tool message, merged into one. Usually that is one message, the one the
+ * user typed; but OpenCode also queues messages for the next turn (session.synthetic with resume: false -- e.g.
+ * letters from neighbouring tabs, plan-mode reminders), and they come right before it. Taking only the last one
+ * lost them (measured 2026-10-05).
+ */
+export function newUserTurn(prompt) {
+  let i = prompt.length
+  while (i > 0 && prompt[i - 1].role === "user") i--
+  const tail = prompt.slice(i)
+  if (!tail.length) return prompt.filter((m) => m.role !== "system")
+  if (tail.length === 1) return tail
+  const parts = tail.flatMap((m) => (typeof m.content === "string" ? [{ type: "text", text: m.content }] : m.content ?? []))
+  return [{ ...tail[tail.length - 1], content: parts }]
+}
+
+/**
  * The newest user message as Claude Code's raw input. The package prefixes every user message with
  * "Human: " (not configurable); a system-role message goes in verbatim. So a text-only user message is
  * passed as such: Claude Code then gets exactly what the user typed (and its own slash commands work).
