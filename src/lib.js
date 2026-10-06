@@ -378,3 +378,42 @@ export function timeStamper(now = () => new Date()) {
     return part
   }
 }
+
+/**
+ * Files of a turn in the shape the package reads (AI SDK provider spec v4: `data` is a tagged union
+ * `{type: "data" | "url" | ...}`). An image sent in an older shape -- a bare base64 string, bytes, a URL, or a
+ * `{type: "image", image}` part -- would fall into the package's "unknown prompt variant" branch and be dropped
+ * silently: the model got only the text `[Image 1]` (2026-10-06). Parts already tagged pass unchanged.
+ */
+const isTagged = (d) => !!d && typeof d === "object" && !(d instanceof Uint8Array) && !(d instanceof ArrayBuffer) && typeof d.type === "string" && typeof d.href !== "string"
+function tagFileData(d) {
+  if (isTagged(d)) return d
+  if (d && typeof d === "object" && typeof d.href === "string") return { type: "url", url: d }
+  if (typeof d === "string") return /^(https?|data):/i.test(d.trim()) ? { type: "url", url: new URL(d.trim()) } : { type: "data", data: d }
+  if (d instanceof ArrayBuffer) return { type: "data", data: new Uint8Array(d) }
+  return { type: "data", data: d }
+}
+export function fileParts(messages) {
+  return messages.map((m) => {
+    if (!Array.isArray(m?.content) || !m.content.some((p) => p?.type === "file" || p?.type === "image")) return m
+    const content = m.content.map((p) => {
+      if (p?.type === "image") return { type: "file", mediaType: p.mediaType ?? p.mimeType ?? "image/*", data: tagFileData(p.image) }
+      if (p?.type !== "file") return p
+      const mediaType = p.mediaType ?? p.mimeType
+      return { ...p, ...(mediaType ? { mediaType } : {}), data: tagFileData(p.data) }
+    })
+    return { ...m, content }
+  })
+}
+/** «image/png data 115K» per file part of the turn (for the log: what reached the provider). */
+export function filesInfo(messages) {
+  const out = []
+  for (const m of messages) for (const p of Array.isArray(m?.content) ? m.content : []) {
+    if (p?.type !== "file" && p?.type !== "image") continue
+    const d = p.type === "image" ? p.image : p.data
+    const shape = isTagged(d) ? d.type : typeof d === "string" ? "string" : d instanceof Uint8Array ? "bytes" : typeof d
+    const size = typeof d?.data === "string" ? d.data.length : typeof d === "string" ? d.length : d?.data?.byteLength ?? d?.byteLength
+    out.push(`${p.mediaType ?? p.mimeType ?? "?"} ${shape}${size ? ` ${Math.round(size / 1024)}K` : ""}`)
+  }
+  return out
+}

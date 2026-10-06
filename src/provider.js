@@ -8,7 +8,7 @@
 //     (OpenCode's system prompt describes OpenCode tools Claude Code does not have);
 //   * one Claude Code session per OpenCode session (`resume`): a turn sends only the new
 //     user message, Claude Code keeps its own transcript, the prompt cache works as in CLI;
-//   * images: streaming input is always on;
+//   * images: streaming input is always on; file parts are passed in the package's shape (fileParts) and logged;
 //   * helper requests of OpenCode (title, summary: no tools) are plain model calls, not turns;
 //   * OpenCode's /compact runs Claude Code's own /compact in the window's session (OpenCode's
 //     summary of a history Claude Code does not read would only cost a turn);
@@ -37,7 +37,7 @@ import { opencodeWindow } from "./opencode-window.js"
 import { spawnClaudeCode } from "./spawn.js"
 import { isToolsCommand, discoverClaude, contextUsage, toolsReport } from "./tools-report.js"
 import { watchOpenCode, openCodeVersion, installedOpenCodeVersion, readCheckState, toast, CHECK_WARNING } from "./opencode-check.js"
-import { accountKey, resumeFor, sessionDirectory, loadSessionMap, saveSessionMap, resolvePeersMcp, peersMcpServer, isHelperRequest, helperSettings, isCompactionRequest, autoCompactWindowFor, disabledTools, enabledSkills, TIME_HINT, claudeEnv, backgroundHint, backgroundWatch, timeStamper, hhmm, rawUserTurn, newUserTurn, lastCallUsage, shortenToolInput, mainModelUsage, textResult, textStream } from "./lib.js"
+import { accountKey, resumeFor, sessionDirectory, loadSessionMap, saveSessionMap, resolvePeersMcp, peersMcpServer, isHelperRequest, helperSettings, isCompactionRequest, autoCompactWindowFor, disabledTools, enabledSkills, TIME_HINT, claudeEnv, backgroundHint, backgroundWatch, timeStamper, hhmm, rawUserTurn, newUserTurn, lastCallUsage, shortenToolInput, mainModelUsage, textResult, textStream, fileParts, filesInfo } from "./lib.js"
 
 const BASE_SETTINGS = {
   systemPrompt: { type: "preset", preset: "claude_code" },
@@ -283,7 +283,10 @@ export function createClaudeCode(options = {}) {
         defaultSettings: { ...BASE_SETTINGS, ...userSettings, ...timeHint, ...claudeSettings(modelId, cfg, cwd, ocSession), ...peersSettings(ocSession), ...(skills ? { skills } : {}), hooks: watch.hooks, onSdkMessage: watch.onSdkMessage, cwd, ...(resume ? { resume } : {}), spawnClaudeCodeProcess: spawnFiltered },
       }).languageModel(modelId)
       // The user's text goes to Claude Code as typed (no "Human: " prefix of the package).
-      const prompt = rawUserTurn(resume ? newUserTurn(callOptions.prompt) : callOptions.prompt.filter((m) => m.role !== "system"))
+      // images: files are passed in the package's shape (fileParts); what arrived is logged, so a dropped image shows
+      const prompt = rawUserTurn(fileParts(resume ? newUserTurn(callOptions.prompt) : callOptions.prompt.filter((m) => m.role !== "system")))
+      const files = filesInfo(prompt)
+      if (files.length) log(`${ocSession} files: ${files.join(", ")}`)
       const opts = { ...callOptions, prompt, tools: undefined, toolChoice: undefined }
 
       const noteWindow = (meta) => {

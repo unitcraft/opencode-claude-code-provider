@@ -28,7 +28,12 @@ Nothing is spoofed: Claude Code runs under your own Claude login, exactly as in 
 - **Permissions:** `permissionMode: auto`; anything that would need a question is denied
   (`permissionPrompts: none`) — OpenCode cannot relay Claude Code's prompts.
 - **Images:** streaming input is always on (base64/data URLs; remote URLs are not supported
-  by the package).
+  by the package). The models must declare image input in `opencode.jsonc`, or OpenCode sends only
+  the text `[Image 1]`:
+  `"opus": { "name": "Opus", "modalities": { "input": ["text", "image"], "output": ["text"] }, "attachment": true, ... }`.
+  File parts are passed in the package's shape whatever form they arrive in (a bare base64 string,
+  bytes, a data URL; the package silently drops the untagged ones), and each turn's files are logged
+  (`<session> files: image/png data 115K`).
 - **Helper requests are plain calls.** OpenCode's helper agents (`title`, `summary`) send the
   window's session header but no tools and their own system prompt. Such a request runs Claude
   Code with that system prompt, no tools, no MCP, no settings, one turn, nothing persisted — not
