@@ -34,6 +34,10 @@ Nothing is spoofed: Claude Code runs under your own Claude login, exactly as in 
   refreshed in the background at start when it is 24 h old, or at once by `/cc-update-models`. A new model takes the
   settings (window, images) of its family in `opencode.jsonc` (Fable — of Opus). Register it next to the provider:
   `"plugins": [..., "<repo>/models"]`.
+- **Heavy runs only through the machine queue.** The project's `heavy_commands` (the plugin's setting: full gate,
+  full build, test runs) are read from its committed settings file; a Bash call that launches one is denied before it
+  runs (hook `PreToolUse`) with a hint to queue it: `peer_watch {command, machine: true}`. A mention (`grep gate.sh`)
+  is not a launch. `heavy_block: "off"` in the settings turns it off.
 - **Images:** streaming input is always on (base64/data URLs; remote URLs are not supported
   by the package). The models must declare image input in `opencode.jsonc`, or OpenCode sends only
   the text `[Image 1]`:

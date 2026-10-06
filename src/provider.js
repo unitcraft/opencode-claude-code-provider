@@ -20,6 +20,7 @@
 //   * `/cc-tools` typed in a window lists every Claude Code tool and skill there and whether it is on (no model call);
 //   * skills switched off are left out of the session (Claude Code takes an allowlist: the provider learns the
 //     full list once per directory from an interrupted turn, 0 tokens);
+//   * heavy runs of the project (heavy_commands) go only through the machine queue: such a Bash command is denied (heavy.js);
 //   * timeStamp: the provider stamps HH:MM before each answer text and tells the model not to write the time;
 //   * letters between OpenCode windows: OpenCode's tool list is dropped, so the opencode-peers tools
 //     (peer_list, peer_send, ...) come to Claude Code as the MCP server `peers`, acting for the
@@ -31,6 +32,7 @@ import os from "node:os"
 import { appendFileSync } from "node:fs"
 import path from "node:path"
 import { noteChannel, compactionWatch } from "./notes.js"
+import { heavyCommandsFor, withHeavyGuard } from "./heavy.js"
 import { texts, compactionAnswer } from "./texts.js"
 import { DEFAULTS, explicitSettingsFor, settingsFor, toolSources, switchSources } from "./settings.js"
 import { opencodeWindow } from "./opencode-window.js"
@@ -273,6 +275,8 @@ export function createClaudeCode(options = {}) {
       }
       const watch = compactionWatch(notes, { userHooks: userSettings.hooks, userOnSdkMessage: onSdk, language: cfg.language })
       const toolMax = Number(cfg.toolInputMax) || 0
+      // тяжёлые прогоны проекта (heavy_commands) — только через очередь машины: Bash с такой командой отклоняется (heavy.js)
+      const heavy = await heavyCommandsFor(cwd)
       const skills = await skillsFor(cfg, ocSession, cwd)
       // timeStamp: a constant line appended to Claude Code's system prompt (cache-stable); the stamp itself below
       // + the background line (plan 002): constant per configuration, so the prompt cache holds
@@ -280,7 +284,7 @@ export function createClaudeCode(options = {}) {
       const timeHint = { systemPrompt: { type: "preset", preset: "claude_code", append } }
       const stamp = cfg.timeStamp ? timeStamper() : (part) => part
       const inner = createBase({
-        defaultSettings: { ...BASE_SETTINGS, ...userSettings, ...timeHint, ...claudeSettings(modelId, cfg, cwd, ocSession), ...peersSettings(ocSession), ...(skills ? { skills } : {}), hooks: watch.hooks, onSdkMessage: watch.onSdkMessage, cwd, ...(resume ? { resume } : {}), spawnClaudeCodeProcess: spawnFiltered },
+        defaultSettings: { ...BASE_SETTINGS, ...userSettings, ...timeHint, ...claudeSettings(modelId, cfg, cwd, ocSession), ...peersSettings(ocSession), ...(skills ? { skills } : {}), hooks: withHeavyGuard(watch.hooks, heavy, cfg.language), onSdkMessage: watch.onSdkMessage, cwd, ...(resume ? { resume } : {}), spawnClaudeCodeProcess: spawnFiltered },
       }).languageModel(modelId)
       // The user's text goes to Claude Code as typed (no "Human: " prefix of the package).
       // images: files are passed in the package's shape (fileParts); what arrived is logged, so a dropped image shows
