@@ -1,0 +1,7 @@
+{
+  "name": "opencode-claude-code-provider-models",
+  "private": true,
+  "type": "module",
+  "description": "OpenCode plugin: Claude Code's models in the model picker (provider claude-code), updated daily or by /cc-update-models",
+  "exports": { ".": "./plugin.js" }
+}

@@ -27,6 +27,13 @@ Nothing is spoofed: Claude Code runs under your own Claude login, exactly as in 
   status file ([plan 003](doc/plans/003-session-env.md)).
 - **Permissions:** `permissionMode: auto`; anything that would need a question is denied
   (`permissionPrompts: none`) — OpenCode cannot relay Claude Code's prompts.
+- **Models in the picker (plugin `models/`).** The plugin puts into OpenCode's catalog the models Claude Code
+  itself offers (`supportedModels`, a control request, no model call): exact versions (`Claude Opus 5.5`,
+  `Claude Fable 5.1`) and the aliases with what they point at now (`Claude Sonnet (рекомендуемая → 5)`); the provider is
+  named `Claude Code · github.com/unitcraft`. The list is cached in `<OpenCode data>/claude-code-models.json` and
+  refreshed in the background at start when it is 24 h old, or at once by `/cc-update-models`. A new model takes the
+  settings (window, images) of its family in `opencode.jsonc` (Fable — of Opus). Register it next to the provider:
+  `"plugins": [..., "<repo>/models"]`.
 - **Images:** streaming input is always on (base64/data URLs; remote URLs are not supported
   by the package). The models must declare image input in `opencode.jsonc`, or OpenCode sends only
   the text `[Image 1]`:
