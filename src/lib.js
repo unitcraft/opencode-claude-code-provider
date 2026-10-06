@@ -267,12 +267,12 @@ export function shortenToolInput(input, max) {
  * The main model of a turn from Claude Code's modelUsage ({"claude-opus-...": {contextWindow, inputTokens, ...}}).
  * Claude Code also calls a small model for its own chores (Haiku), so "the first entry with a window" was wrong:
  * an Opus window got the compaction note "claude-haiku-4-5 window 200k" (seen 2026-10-05). The main one is the
- * entry whose name has the window's model alias (opus / sonnet / haiku), else the one with the most tokens.
+ * entry whose name has the window's model alias (fable / opus / sonnet / haiku), else the one with the most tokens.
  */
 export function mainModelUsage(modelUsage, modelId) {
   const entries = Object.entries(modelUsage ?? {}).filter(([, u]) => u && u.contextWindow)
   if (!entries.length) return undefined
-  const alias = String(modelId ?? "").toLowerCase().match(/opus|sonnet|haiku/)?.[0]
+  const alias = String(modelId ?? "").toLowerCase().match(/fable|opus|sonnet|haiku/)?.[0]
   const byName = alias ? entries.filter(([name]) => name.toLowerCase().includes(alias)) : []
   const tokens = ([, u]) => (u.inputTokens ?? 0) + (u.cacheReadInputTokens ?? 0) + (u.cacheCreationInputTokens ?? 0) + (u.outputTokens ?? 0)
   const pool = byName.length ? byName : entries

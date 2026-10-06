@@ -255,3 +255,8 @@ test("claudeEnv: account, threshold and the OpenCode session for the repository'
   assert.deepEqual(env, { PATH: "p", CLAUDE_CONFIG_DIR: "D:/acc", CLAUDE_CODE_AUTO_COMPACT_WINDOW: "500000", OPENCODE_SESSION_ID: "ses_abc" })
   assert.deepEqual(claudeEnv({ PATH: "p" }, {}), { PATH: "p" })
 })
+
+test("mainModelUsage picks the Fable entry for a fable window", () => {
+  const u = { "claude-haiku-4-5": { contextWindow: 200000, inputTokens: 900 }, "claude-fable-5-1": { contextWindow: 1000000, inputTokens: 10 } }
+  assert.equal(mainModelUsage(u, "fable").name, "claude-fable-5-1")
+})
