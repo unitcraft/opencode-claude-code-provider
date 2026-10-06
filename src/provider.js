@@ -21,8 +21,8 @@
 //   * skills switched off are left out of the session (Claude Code takes an allowlist: the provider learns the
 //     full list once per directory from an interrupted turn, 0 tokens);
 //   * timeStamp: the provider stamps HH:MM before each answer text and tells the model not to write the time;
-//   * letters between OpenCode windows: OpenCode's tool list is dropped, so the opencode-peers tools
-//     (peer_list, peer_send, ...) come to Claude Code as the MCP server `peers`, acting for the
+//   * letters between OpenCode windows: OpenCode's tool list is dropped, so the opencode-harness-crew tools
+//     (crew_list, crew_send, ...) come to Claude Code as the MCP server `crew`, acting for the
 //     requesting OpenCode session.
 // OpenCode loads the FIRST export whose name starts with "create", so this module exports
 // only the factory (the package itself exports createAPICallError first).
@@ -37,7 +37,7 @@ import { opencodeWindow } from "./opencode-window.js"
 import { spawnClaudeCode } from "./spawn.js"
 import { isToolsCommand, discoverClaude, contextUsage, toolsReport } from "./tools-report.js"
 import { watchOpenCode, openCodeVersion, installedOpenCodeVersion, readCheckState, toast, CHECK_WARNING } from "./opencode-check.js"
-import { accountKey, resumeFor, sessionDirectory, loadSessionMap, saveSessionMap, resolvePeersMcp, peersMcpServer, isHelperRequest, helperSettings, isCompactionRequest, autoCompactWindowFor, disabledTools, enabledSkills, TIME_HINT, claudeEnv, backgroundHint, backgroundWatch, timeStamper, hhmm, rawUserTurn, newUserTurn, lastCallUsage, shortenToolInput, mainModelUsage, textResult, textStream, fileParts, filesInfo } from "./lib.js"
+import { accountKey, resumeFor, sessionDirectory, loadSessionMap, saveSessionMap, resolveCrewMcp, crewMcpServer, isHelperRequest, helperSettings, isCompactionRequest, autoCompactWindowFor, disabledTools, enabledSkills, TIME_HINT, claudeEnv, backgroundHint, backgroundWatch, timeStamper, hhmm, rawUserTurn, newUserTurn, lastCallUsage, shortenToolInput, mainModelUsage, textResult, textStream, fileParts, filesInfo } from "./lib.js"
 
 const BASE_SETTINGS = {
   systemPrompt: { type: "preset", preset: "claude_code" },
@@ -131,15 +131,15 @@ export function createClaudeCode(options = {}) {
       ...(disabled.length ? { disallowedTools: disabled } : {}),
     }
   }
-  // opencode-peers MCP server: `peersMcp` (path to its mcp.ts, false = off), default the sibling checkout.
-  const peersMcp = resolvePeersMcp(options.peersMcp)
-  const peersSettings = (ocSession) => {
-    if (!peersMcp) return {}
+  // opencode-crew MCP server: `crewMcp` (path to its mcp.ts, false = off), default the sibling checkout.
+  const crewMcp = resolveCrewMcp(options.crewMcp)
+  const crewSettings = (ocSession) => {
+    if (!crewMcp) return {}
     return {
-      mcpServers: { ...(userSettings.mcpServers ?? {}), peers: peersMcpServer(peersMcp, ocSession, { node: options.peersNode || "node" }) },
+      mcpServers: { ...(userSettings.mcpServers ?? {}), crew: crewMcpServer(crewMcp, ocSession, { node: options.crewNode || "node" }) },
       // Auto-allowed (no prompt can be shown). The package passes allowedTools and disallowedTools both
       // (its warning that only allowedTools is used is not what its code does).
-      allowedTools: [...(userSettings.allowedTools ?? []), "mcp__peers"],
+      allowedTools: [...(userSettings.allowedTools ?? []), "mcp__crew"],
     }
   }
 
@@ -165,7 +165,7 @@ export function createClaudeCode(options = {}) {
       const started = Date.now()
       try {
         const inner = createBase({
-          defaultSettings: { ...BASE_SETTINGS, ...userSettings, ...claudeSettings(modelId, cfg, cwd, ocSession), ...peersSettings(ocSession), onSdkMessage, cwd, resume, spawnClaudeCodeProcess: spawnFiltered },
+          defaultSettings: { ...BASE_SETTINGS, ...userSettings, ...claudeSettings(modelId, cfg, cwd, ocSession), ...crewSettings(ocSession), onSdkMessage, cwd, resume, spawnClaudeCodeProcess: spawnFiltered },
         }).languageModel(modelId)
         // raw "/compact" (a system-role message goes in without the package's "Human: " prefix)
         await inner.doGenerate({ ...callOptions, prompt: [{ role: "system", content: "/compact" }], tools: undefined, toolChoice: undefined })
@@ -181,7 +181,7 @@ export function createClaudeCode(options = {}) {
     // Agent SDK options of a window for the interrupted discovery turn and the context estimate.
     const sdkOptions = (cfg, ocSession, cwd, disallowedTools) => {
       const c = claudeSettings(modelId, cfg, cwd, ocSession)
-      const peers = peersSettings(ocSession)
+      const crew = crewSettings(ocSession)
       return {
         model: modelId,
         systemPrompt: BASE_SETTINGS.systemPrompt,
@@ -189,7 +189,7 @@ export function createClaudeCode(options = {}) {
         permissionMode: BASE_SETTINGS.permissionMode,
         cwd: cwd ?? os.tmpdir(),
         env: c.env ?? userSettings.env ?? process.env,
-        ...(peers.mcpServers ? { mcpServers: peers.mcpServers } : {}),
+        ...(crew.mcpServers ? { mcpServers: crew.mcpServers } : {}),
         ...(disallowedTools.length ? { disallowedTools } : {}),
       }
     }
@@ -276,11 +276,11 @@ export function createClaudeCode(options = {}) {
       const skills = await skillsFor(cfg, ocSession, cwd)
       // timeStamp: a constant line appended to Claude Code's system prompt (cache-stable); the stamp itself below
       // + the background line (plan 002): constant per configuration, so the prompt cache holds
-      const append = [cfg.timeStamp ? TIME_HINT : "", backgroundHint(Boolean(peersMcp))].filter(Boolean).join("\n\n")
+      const append = [cfg.timeStamp ? TIME_HINT : "", backgroundHint(Boolean(crewMcp))].filter(Boolean).join("\n\n")
       const timeHint = { systemPrompt: { type: "preset", preset: "claude_code", append } }
       const stamp = cfg.timeStamp ? timeStamper() : (part) => part
       const inner = createBase({
-        defaultSettings: { ...BASE_SETTINGS, ...userSettings, ...timeHint, ...claudeSettings(modelId, cfg, cwd, ocSession), ...peersSettings(ocSession), ...(skills ? { skills } : {}), hooks: watch.hooks, onSdkMessage: watch.onSdkMessage, cwd, ...(resume ? { resume } : {}), spawnClaudeCodeProcess: spawnFiltered },
+        defaultSettings: { ...BASE_SETTINGS, ...userSettings, ...timeHint, ...claudeSettings(modelId, cfg, cwd, ocSession), ...crewSettings(ocSession), ...(skills ? { skills } : {}), hooks: watch.hooks, onSdkMessage: watch.onSdkMessage, cwd, ...(resume ? { resume } : {}), spawnClaudeCodeProcess: spawnFiltered },
       }).languageModel(modelId)
       // The user's text goes to Claude Code as typed (no "Human: " prefix of the package).
       // images: files are passed in the package's shape (fileParts); what arrived is logged, so a dropped image shows

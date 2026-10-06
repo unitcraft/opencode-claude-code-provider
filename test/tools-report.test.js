@@ -21,7 +21,7 @@ test("the report: every tool, on/off, and which layer decided", () => {
   mkdirSync(path.join(repo, ".opencode"))
   writeFileSync(path.join(repo, ".opencode", "opencode-claude-code-provider.json"), JSON.stringify({ tools: { Workflow: true } }))
   const sources = toolSources({ tools: { WebSearch: false } }, repo)
-  const all = ["Bash", "Read", "WebSearch", "Workflow", "Artifact", "ToolSearch", "mcp__peers__peer_send", "NotebookEdit"]
+  const all = ["Bash", "Read", "WebSearch", "Workflow", "Artifact", "ToolSearch", "mcp__crew__crew_send", "NotebookEdit"]
   const report = toolsReport({ all, sources, usage: { categories: [{ name: "System tools", tokens: 15000 }], totalTokens: 30000 }, language: "en", alsoDisallowed: ["NotebookEdit"] })
   const row = (name) => report.split("\n").find((l) => l.startsWith(`| ${name} |`))
   assert.match(row("Bash"), /\| on \| Claude Code \|/)
@@ -30,7 +30,7 @@ test("the report: every tool, on/off, and which layer decided", () => {
   assert.match(row("Artifact"), /\| off \| provider default \|/)
   assert.match(row("NotebookEdit"), /\| off \| disallowedTools \|/)
   assert.match(row("DesignSync"), /\| off \| provider default \|/) // a default even when Claude Code did not list it
-  assert.ok(report.indexOf("| mcp__peers__peer_send") > report.indexOf("| WebSearch")) // MCP tools after built-ins
+  assert.ok(report.indexOf("| mcp__crew__crew_send") > report.indexOf("| WebSearch")) // MCP tools after built-ins
   assert.match(report, /Project file: .*opencode-claude-code-provider\.json/)
   assert.match(report, /System tools 15\.0k/)
   assert.match(toolsReport({ all, sources, language: "ru" }), /\| Инструмент \| Статус \| Кто решил \|/)

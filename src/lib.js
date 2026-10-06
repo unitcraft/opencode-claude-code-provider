@@ -90,24 +90,24 @@ export function saveSessionMap(map, file = sessionMapFile()) {
 }
 
 /**
- * Letters between OpenCode windows (opencode-peers) for Claude Code: its stdio MCP server, run for ONE
- * OpenCode session. `option`: path to opencode-peers' mcp.ts, `false` to switch off, unset -> the sibling
- * checkout `../opencode-peers/mcp.ts` next to this provider when it exists. Undefined -> no server.
+ * Letters between OpenCode windows (opencode-harness-crew) for Claude Code: its stdio MCP server, run for ONE
+ * OpenCode session. `option`: path to opencode-harness-crew' mcp.ts, `false` to switch off, unset -> the sibling
+ * checkout `../opencode-harness-crew/mcp.ts` next to this provider when it exists. Undefined -> no server.
  */
-export function resolvePeersMcp(option, here = path.dirname(path.dirname(fileURLToPath(import.meta.url)))) { // here: the package root (src/..)
+export function resolveCrewMcp(option, here = path.dirname(path.dirname(fileURLToPath(import.meta.url)))) { // here: the package root (src/..)
   if (option === false) return undefined
-  const file = typeof option === "string" && option ? path.resolve(option) : path.resolve(here, "..", "opencode-peers", "mcp.ts")
+  const file = typeof option === "string" && option ? path.resolve(option) : path.resolve(here, "..", "opencode-harness-crew", "mcp.ts")
   return existsSync(file) ? file : undefined
 }
 
 /** MCP server config (Claude Agent SDK `mcpServers` entry) acting for OpenCode session `session`. */
-export function peersMcpServer(file, session, { node = "node", env = process.env } = {}) {
+export function crewMcpServer(file, session, { node = "node", env = process.env } = {}) {
   return {
     type: "stdio",
     command: node,
     args: [file],
     env: {
-      OPENCODE_PEERS_SESSION: session,
+      OPENCODE_CREW_SESSION: session,
       // the same mailbox as the OpenCode server's plugin
       ...(env.XDG_DATA_HOME ? { XDG_DATA_HOME: env.XDG_DATA_HOME } : {}),
     },
@@ -119,7 +119,7 @@ export function peersMcpServer(file, session, { node = "node", env = process.env
  * window's session header but WITHOUT tools and with their own system prompt ("You are a title
  * generator..."); an agent turn always carries OpenCode's tool list. Measured 2026-10-04: run as a
  * Claude Code turn (Claude Code's prompt, tools, MCP, the window's session) the title request executed
- * the window's user message a second time -- peer_send went out twice -- and raced the window's turn
+ * the window's user message a second time -- crew_send went out twice -- and raced the window's turn
  * for the session map.
  */
 export function isHelperRequest(callOptions) {
@@ -326,7 +326,7 @@ export function enabledSkills(discovered, skills) {
 /**
  * Claude Code's environment for a window's turn: the account (CLAUDE_CONFIG_DIR), the compaction threshold, and
  * OPENCODE_SESSION_ID (plan 003) -- so the repository's hooks know which OpenCode tab they serve (a Stop hook can read
- * that session's opencode-peers status file).
+ * that session's opencode-harness-crew status file).
  */
 export const claudeEnv = (base, { account, threshold, session } = {}) => ({
   ...base,
@@ -346,10 +346,10 @@ export const TIME_HINT =
  * What the model is told about background work (plan 002; constant: cache-stable). Claude Code's process ends with
  * the window's turn, so a background task dies with it and its notification never comes (measured 2026-10-05).
  */
-export const backgroundHint = (peers) =>
+export const backgroundHint = (crew) =>
   "In this OpenCode window your background work (Bash run_in_background, Monitor, background agents) is stopped when your turn ends, and no completion notification will come. " +
-  (peers
-    ? "To wait for something that must outlive the turn (a long gate, a build), use the opencode-peers tool peer_watch: it runs your waiting command in the OpenCode server and wakes this tab with the result; then end your turn."
+  (crew
+    ? "To wait for something that must outlive the turn (a long gate, a build), use the opencode-harness-crew tool crew_watch: it runs your waiting command in the OpenCode server and wakes this tab with the result; then end your turn."
     : "Wait for long work within the turn, or tell the user what to check later.")
 
 /** Live background tasks of a turn, from Claude Code's background_tasks_changed (ambient watchers left out). */

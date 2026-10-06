@@ -23,7 +23,7 @@ Nothing is spoofed: Claude Code runs under your own Claude login, exactly as in 
   the OpenCode service was started, and one service serves projects with different accounts. A Claude Code
   session is resumed only under the account it started with; after a change of account the window starts anew.
 - **The tab is known to hooks.** `OPENCODE_SESSION_ID` (the OpenCode session id) is in Claude Code's environment,
-  so the repository's hooks know which tab they serve -- e.g. a `Stop` hook reads that session's opencode-peers
+  so the repository's hooks know which tab they serve -- e.g. a `Stop` hook reads that session's opencode-harness-crew
   status file ([plan 003](doc/plans/003-session-env.md)).
 - **Permissions:** `permissionMode: auto`; anything that would need a question is denied
   (`permissionPrompts: none`) — OpenCode cannot relay Claude Code's prompts.
@@ -45,7 +45,7 @@ Nothing is spoofed: Claude Code runs under your own Claude login, exactly as in 
   window's session header but no tools and their own system prompt. Such a request runs Claude
   Code with that system prompt, no tools, no MCP, no settings, one turn, nothing persisted — not
   as a turn of the window's session. (Before 2026-10-04 it was a full turn: with `title` on
-  `claude-code` the window's message was executed twice — a `peer_send` letter went out twice —
+  `claude-code` the window's message was executed twice — a `crew_send` letter went out twice —
   and the title was the first line of that answer.) So `title` / `summary` may use `claude-code`.
 - **`/compact` compacts Claude Code's memory.** Claude Code keeps the whole conversation in its
   own session; OpenCode's own compaction (a summary of OpenCode's history) could not shrink it --
@@ -74,13 +74,13 @@ Nothing is spoofed: Claude Code runs under your own Claude login, exactly as in 
   `PreCompact` / `PostCompact` put two lines into the answer: "⏳ Claude Code сжимает контекст…"
   and "✓ Контекст сжат за N с." (written by the provider, no model call; a line never splits a
   text block the model is streaming).
-- **Letters and tasks between tabs** ([opencode-peers](https://github.com/unitcraft/opencode-peers)):
-  OpenCode's tool list is dropped, so the plugin's `peer_*` tools would be missing. Every request
-  gets the peers MCP server (`node <opencode-peers>/mcp.ts`, tools `mcp__peers__peer_list`, ...,
-  auto-allowed) acting for the requesting OpenCode session (`OPENCODE_PEERS_SESSION`, same
-  `XDG_DATA_HOME` mailbox). Its location: provider setting `peersMcp` (path to `mcp.ts`, `false`
-  turns it off), by default the sibling checkout `../opencode-peers/mcp.ts`; `peersNode` overrides
-  the `node` command (node >= 24). The project list is not repeated here: the peers plugin shares
+- **Letters and tasks between tabs** ([opencode-harness-crew](https://github.com/unitcraft/opencode-harness-crew)):
+  OpenCode's tool list is dropped, so the plugin's `crew_*` tools would be missing. Every request
+  gets the crew MCP server (`node <opencode-harness-crew>/mcp.ts`, tools `mcp__crew__crew_list`, ...,
+  auto-allowed) acting for the requesting OpenCode session (`OPENCODE_CREW_SESSION`, same
+  `XDG_DATA_HOME` mailbox). Its location: provider setting `crewMcp` (path to `mcp.ts`, `false`
+  turns it off), by default the sibling checkout `../opencode-harness-crew/mcp.ts`; `crewNode` overrides
+  the `node` command (node >= 24). The project list is not repeated here: the crew plugin shares
   its own. Incoming letters need nothing: the plugin puts them into the OpenCode session.
 - OpenCode loads the first export whose name starts with `create`; this module exports only
   `createClaudeCode` (the package exports `createAPICallError` first).
@@ -167,7 +167,7 @@ logged.
   "language": "ru",                                    // the provider's own lines: "en" (default) | "ru"
   "autoCompactWindow": { "opus": 500000 },             // per family (opus, sonnet, haiku, ...) or one number
   "tools": { "WebSearch": false },                     // false = removed from Claude Code's context
-  "peersMcp": "D:/Sources/opencode-plugins/opencode-peers/mcp.ts" // default: the sibling checkout
+  "crewMcp": "D:/Sources/opencode-plugins/opencode-harness-crew/mcp.ts" // default: the sibling checkout
 }
 ```
 
@@ -222,7 +222,7 @@ turn again. By hand: `npm run check-opencode`.
 - Tools are Claude Code's, not OpenCode's: OpenCode plugins that act on OpenCode tool calls
   or inject into OpenCode's system prompt do not reach these windows.
 - Every turn carries Claude Code's own part (measured 2026-10-04, Haiku): system prompt ~7k,
-  built-in tools ~27k (~15k with the `tools` above), peers MCP ~0.2k,
+  built-in tools ~27k (~15k with the `tools` above), crew MCP ~0.2k,
   account settings ~0.8k, plus the repository's CLAUDE.md with its imports (nova: ~12k,
   nova-opencode: ~8k). Written to the prompt cache once, then read from it each turn.
 - OpenCode plugins that add to OpenCode's system prompt (opencode-windows-env's time hint) or act on
@@ -232,14 +232,14 @@ turn again. By hand: `npm run check-opencode`.
   process ends with the turn and the task is killed (measured 2026-10-05). The next turn tells the model the task
   was stopped; the provider drops the empty turn Claude Code makes of that notice, which used to end the window's
   turn with no answer ([plan 002](doc/plans/002-background-tasks.md)). Claude Code's system prompt says so and points
-  to opencode-peers' `peer_watch` (the plugin waits in the OpenCode server and wakes the tab); a turn that ends with
+  to opencode-harness-crew' `crew_watch` (the plugin waits in the OpenCode server and wakes the tab); a turn that ends with
   live background tasks shows a note naming them.
 
 ## Related
 
 Other OpenCode plugins of the same set (they work independently; together they are tested on one machine):
 
-- [opencode-peers](https://github.com/unitcraft/opencode-peers) — letters and tasks between OpenCode sessions on one machine, across windows and projects, addressed by `project.role`
+- [opencode-harness-crew](https://github.com/unitcraft/opencode-harness-crew) — letters and tasks between OpenCode sessions on one machine, across windows and projects, addressed by `project.role`
 - [opencode-windows-env](https://github.com/unitcraft/opencode-windows-env) — a sane command environment on Windows and a time stamp on agent messages
 - [opencode-claude-guards](https://github.com/unitcraft/opencode-claude-guards) — the repository's Claude Code rules (hooks, permissions) in OpenCode windows
 

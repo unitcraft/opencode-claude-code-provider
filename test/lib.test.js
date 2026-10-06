@@ -6,7 +6,7 @@ import path from "node:path"
 import { DatabaseSync } from "node:sqlite"
 import { test } from "node:test"
 import { compactionAnswer, texts } from "../src/texts.js"
-import { claudeEnv, backgroundHint, backgroundWatch, autoCompactWindowFor, disabledTools, helperSettings, lastCallUsage, mainModelUsage, newUserTurn, rawUserTurn, shortenToolInput, isCompactionRequest, isHelperRequest, loadSessionMap, peersMcpServer, resolvePeersMcp, saveSessionMap, sessionDirectory } from "../src/lib.js"
+import { claudeEnv, backgroundHint, backgroundWatch, autoCompactWindowFor, disabledTools, helperSettings, lastCallUsage, mainModelUsage, newUserTurn, rawUserTurn, shortenToolInput, isCompactionRequest, isHelperRequest, loadSessionMap, crewMcpServer, resolveCrewMcp, saveSessionMap, sessionDirectory } from "../src/lib.js"
 
 function fakeOpencode() {
   const data = mkdtempSync(path.join(os.tmpdir(), "occ-"))
@@ -41,26 +41,26 @@ test("the session map survives a reload", () => {
   assert.deepEqual(loadSessionMap(file), { ses_A: "11111111-2222-3333-4444-555555555555" })
 })
 
-test("peers MCP: explicit path, sibling checkout by default, off with false or when absent", () => {
-  const base = mkdtempSync(path.join(os.tmpdir(), "occ-peers-"))
+test("crew MCP: explicit path, sibling checkout by default, off with false or when absent", () => {
+  const base = mkdtempSync(path.join(os.tmpdir(), "occ-crew-"))
   const provider = path.join(base, "opencode-claude-code-provider")
-  const sibling = path.join(base, "opencode-peers", "mcp.ts")
+  const sibling = path.join(base, "opencode-harness-crew", "mcp.ts")
   mkdirSync(provider)
-  assert.equal(resolvePeersMcp(undefined, provider), undefined) // no sibling yet
+  assert.equal(resolveCrewMcp(undefined, provider), undefined) // no sibling yet
   mkdirSync(path.dirname(sibling))
   writeFileSync(sibling, "")
-  assert.equal(resolvePeersMcp(undefined, provider), sibling)
-  assert.equal(resolvePeersMcp(false, provider), undefined)
+  assert.equal(resolveCrewMcp(undefined, provider), sibling)
+  assert.equal(resolveCrewMcp(false, provider), undefined)
   const other = path.join(base, "elsewhere-mcp.ts")
   writeFileSync(other, "")
-  assert.equal(resolvePeersMcp(other, provider), other)
-  assert.equal(resolvePeersMcp(path.join(base, "missing.ts"), provider), undefined)
+  assert.equal(resolveCrewMcp(other, provider), other)
+  assert.equal(resolveCrewMcp(path.join(base, "missing.ts"), provider), undefined)
 })
 
-test("peers MCP server acts for the requesting OpenCode session, in the same mailbox", () => {
-  const cfg = peersMcpServer("D:/x/mcp.ts", "ses_A", { env: { XDG_DATA_HOME: "D:/data", OTHER: "1" } })
-  assert.deepEqual(cfg, { type: "stdio", command: "node", args: ["D:/x/mcp.ts"], env: { OPENCODE_PEERS_SESSION: "ses_A", XDG_DATA_HOME: "D:/data" } })
-  assert.deepEqual(peersMcpServer("m.ts", "ses_B", { node: "C:/node.exe", env: {} }).env, { OPENCODE_PEERS_SESSION: "ses_B" })
+test("crew MCP server acts for the requesting OpenCode session, in the same mailbox", () => {
+  const cfg = crewMcpServer("D:/x/mcp.ts", "ses_A", { env: { XDG_DATA_HOME: "D:/data", OTHER: "1" } })
+  assert.deepEqual(cfg, { type: "stdio", command: "node", args: ["D:/x/mcp.ts"], env: { OPENCODE_CREW_SESSION: "ses_A", XDG_DATA_HOME: "D:/data" } })
+  assert.deepEqual(crewMcpServer("m.ts", "ses_B", { node: "C:/node.exe", env: {} }).env, { OPENCODE_CREW_SESSION: "ses_B" })
 })
 
 test("helper requests (no tools: title, summary) are told apart from agent turns", () => {
@@ -74,7 +74,7 @@ test("a helper request runs as a plain call: its own system prompt, no tools, no
   const s = helperSettings([
     { role: "system", content: "You are a title generator." },
     { role: "system", content: "Rules." },
-    { role: "user", content: [{ type: "text", text: "Call peer_send" }] },
+    { role: "user", content: [{ type: "text", text: "Call crew_send" }] },
   ])
   assert.equal(s.systemPrompt, "You are a title generator.\n\nRules.")
   assert.deepEqual(s.tools, [])
@@ -105,7 +105,7 @@ test("OpenCode's compaction request is recognized, both openings; ordinary turns
 
 test("/compact of a window without a Claude Code session: answered at once, nothing to compact", async () => {
   const { createClaudeCode } = await import("../index.js")
-  const model = createClaudeCode({ peersMcp: false, watchOpenCode: false, autoCompactWindow: { haiku: 150000 } }).languageModel("haiku")
+  const model = createClaudeCode({ crewMcp: false, watchOpenCode: false, autoCompactWindow: { haiku: 150000 } }).languageModel("haiku")
   const tools = [{ type: "function", name: "bash", inputSchema: { type: "object" } }]
   // no session header: a real run would be refused ("cannot resolve the directory"), so an answer proves no run
   const g = await model.doGenerate({ prompt: compactionAsk("You MUST summarize the conversation above into a structured summary"), tools, headers: {} })
@@ -246,8 +246,8 @@ test("backgroundWatch: the live set is the last background_tasks_changed, ambien
   assert.deepEqual(b.live().map((x) => x.task_id), ["a"])
   b.onSdkMessage({ type: "system", subtype: "background_tasks_changed", tasks: [] })
   assert.deepEqual(b.live(), [])
-  assert.match(backgroundHint(true), /peer_watch/)
-  assert.doesNotMatch(backgroundHint(false), /peer_watch/)
+  assert.match(backgroundHint(true), /crew_watch/)
+  assert.doesNotMatch(backgroundHint(false), /crew_watch/)
 })
 
 test("claudeEnv: account, threshold and the OpenCode session for the repository's hooks (plan 003)", () => {

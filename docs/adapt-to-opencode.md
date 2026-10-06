@@ -16,7 +16,7 @@
    и удлиняет память Claude Code, а не сжимает её.
 2. СЛУЖЕБНЫЕ ЗАПРОСЫ (заголовок и т.п.) провайдер узнаёт по тому, что в них НЕТ инструментов
    (`isHelperRequest` в `src/lib.js`). Если OpenCode начал слать инструменты — запрос заголовка снова станет
-   полным ходом Claude и повторит сообщение окна (письмо peer_send уйдёт дважды).
+   полным ходом Claude и повторит сообщение окна (письмо crew_send уйдёт дважды).
 
 Порядок работы:
 1. `cd D:/Sources/opencode-plugins/opencode-claude-code-provider && npm run check-opencode` — какие
@@ -39,7 +39,7 @@
 6. Живая проверка в той же песочнице: сжатие завершилось (`compaction completed`, ответ «Claude Code compacted…»),
    в сессии Claude Code есть команда `/compact` и нет запроса OpenCode «summarize»; следующий ход читает меньше
    токенов, чем до сжатия; после сжатия окно помнит факты из начала; запрос заголовка не повторяет
-   сообщение окна (одно письмо на один `peer_send`). `npm run check-opencode` — `ok`.
+   сообщение окна (одно письмо на один `crew_send`). `npm run check-opencode` — `ok`.
 7. Коммит в ветке (`git commit -s -F <файл> --only -- <файлы>`, новые файлы — по имени, без `git add -A`),
    слияние в `main` fast-forward, `npm test` на `main`, `git push origin main`. Удали
    `claude-code-provider-check.json`, чтобы провайдер проверил версию заново. Убери дерево и ветку.
