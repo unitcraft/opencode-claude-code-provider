@@ -44,7 +44,7 @@ test("the session map survives a reload", () => {
 test("crew MCP: explicit path, sibling checkout by default, off with false or when absent", () => {
   const base = mkdtempSync(path.join(os.tmpdir(), "occ-crew-"))
   const provider = path.join(base, "opencode-claude-code-provider")
-  const sibling = path.join(base, "opencode-harness-crew", "mcp.ts")
+  const sibling = path.join(base, "crew-harness", "mcp.ts")
   mkdirSync(provider)
   assert.equal(resolveCrewMcp(undefined, provider), undefined) // no sibling yet
   mkdirSync(path.dirname(sibling))

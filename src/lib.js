@@ -90,13 +90,13 @@ export function saveSessionMap(map, file = sessionMapFile()) {
 }
 
 /**
- * Letters between OpenCode windows (opencode-harness-crew) for Claude Code: its stdio MCP server, run for ONE
- * OpenCode session. `option`: path to opencode-harness-crew' mcp.ts, `false` to switch off, unset -> the sibling
- * checkout `../opencode-harness-crew/mcp.ts` next to this provider when it exists. Undefined -> no server.
+ * Letters between OpenCode windows (crew-harness) for Claude Code: its stdio MCP server, run for ONE
+ * OpenCode session. `option`: path to crew-harness' mcp.ts, `false` to switch off, unset -> the sibling
+ * checkout `../crew-harness/mcp.ts` next to this provider when it exists. Undefined -> no server.
  */
 export function resolveCrewMcp(option, here = path.dirname(path.dirname(fileURLToPath(import.meta.url)))) { // here: the package root (src/..)
   if (option === false) return undefined
-  const file = typeof option === "string" && option ? path.resolve(option) : path.resolve(here, "..", "opencode-harness-crew", "mcp.ts")
+  const file = typeof option === "string" && option ? path.resolve(option) : path.resolve(here, "..", "crew-harness", "mcp.ts")
   return existsSync(file) ? file : undefined
 }
 
@@ -326,7 +326,7 @@ export function enabledSkills(discovered, skills) {
 /**
  * Claude Code's environment for a window's turn: the account (CLAUDE_CONFIG_DIR), the compaction threshold, and
  * OPENCODE_SESSION_ID (plan 003) -- so the repository's hooks know which OpenCode tab they serve (a Stop hook can read
- * that session's opencode-harness-crew status file).
+ * that session's crew-harness status file).
  */
 export const claudeEnv = (base, { account, threshold, session } = {}) => ({
   ...base,
@@ -349,7 +349,7 @@ export const TIME_HINT =
 export const backgroundHint = (crew) =>
   "In this OpenCode window your background work (Bash run_in_background, Monitor, background agents) is stopped when your turn ends, and no completion notification will come. " +
   (crew
-    ? "To wait for something that must outlive the turn (a long gate, a build), use the opencode-harness-crew tool crew_watch: it runs your waiting command in the OpenCode server and wakes this tab with the result; then end your turn."
+    ? "To wait for something that must outlive the turn (a long gate, a build), use the crew-harness tool crew_watch: it runs your waiting command in the OpenCode server and wakes this tab with the result; then end your turn."
     : "Wait for long work within the turn, or tell the user what to check later.")
 
 /** Live background tasks of a turn, from Claude Code's background_tasks_changed (ambient watchers left out). */

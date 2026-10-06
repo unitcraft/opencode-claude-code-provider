@@ -23,7 +23,7 @@ Nothing is spoofed: Claude Code runs under your own Claude login, exactly as in 
   the OpenCode service was started, and one service serves projects with different accounts. A Claude Code
   session is resumed only under the account it started with; after a change of account the window starts anew.
 - **The tab is known to hooks.** `OPENCODE_SESSION_ID` (the OpenCode session id) is in Claude Code's environment,
-  so the repository's hooks know which tab they serve -- e.g. a `Stop` hook reads that session's opencode-harness-crew
+  so the repository's hooks know which tab they serve -- e.g. a `Stop` hook reads that session's crew-harness
   status file ([plan 003](doc/plans/003-session-env.md)).
 - **Permissions:** `permissionMode: auto`; anything that would need a question is denied
   (`permissionPrompts: none`) — OpenCode cannot relay Claude Code's prompts.
@@ -74,12 +74,12 @@ Nothing is spoofed: Claude Code runs under your own Claude login, exactly as in 
   `PreCompact` / `PostCompact` put two lines into the answer: "⏳ Claude Code сжимает контекст…"
   and "✓ Контекст сжат за N с." (written by the provider, no model call; a line never splits a
   text block the model is streaming).
-- **Letters and tasks between tabs** ([opencode-harness-crew](https://github.com/unitcraft/opencode-harness-crew)):
+- **Letters and tasks between tabs** ([crew-harness](https://github.com/unitcraft/crew-harness)):
   OpenCode's tool list is dropped, so the plugin's `crew_*` tools would be missing. Every request
-  gets the crew MCP server (`node <opencode-harness-crew>/mcp.ts`, tools `mcp__crew__crew_list`, ...,
+  gets the crew MCP server (`node <crew-harness>/mcp.ts`, tools `mcp__crew__crew_list`, ...,
   auto-allowed) acting for the requesting OpenCode session (`OPENCODE_CREW_SESSION`, same
   `XDG_DATA_HOME` mailbox). Its location: provider setting `crewMcp` (path to `mcp.ts`, `false`
-  turns it off), by default the sibling checkout `../opencode-harness-crew/mcp.ts`; `crewNode` overrides
+  turns it off), by default the sibling checkout `../crew-harness/mcp.ts`; `crewNode` overrides
   the `node` command (node >= 24). The project list is not repeated here: the crew plugin shares
   its own. Incoming letters need nothing: the plugin puts them into the OpenCode session.
 - OpenCode loads the first export whose name starts with `create`; this module exports only
@@ -167,7 +167,7 @@ logged.
   "language": "ru",                                    // the provider's own lines: "en" (default) | "ru"
   "autoCompactWindow": { "opus": 500000 },             // per family (opus, sonnet, haiku, ...) or one number
   "tools": { "WebSearch": false },                     // false = removed from Claude Code's context
-  "crewMcp": "D:/Sources/opencode-plugins/opencode-harness-crew/mcp.ts" // default: the sibling checkout
+  "crewMcp": "D:/Sources/opencode-plugins/crew-harness/mcp.ts" // default: the sibling checkout
 }
 ```
 
@@ -232,14 +232,14 @@ turn again. By hand: `npm run check-opencode`.
   process ends with the turn and the task is killed (measured 2026-10-05). The next turn tells the model the task
   was stopped; the provider drops the empty turn Claude Code makes of that notice, which used to end the window's
   turn with no answer ([plan 002](doc/plans/002-background-tasks.md)). Claude Code's system prompt says so and points
-  to opencode-harness-crew' `crew_watch` (the plugin waits in the OpenCode server and wakes the tab); a turn that ends with
+  to crew-harness' `crew_watch` (the plugin waits in the OpenCode server and wakes the tab); a turn that ends with
   live background tasks shows a note naming them.
 
 ## Related
 
 Other OpenCode plugins of the same set (they work independently; together they are tested on one machine):
 
-- [opencode-harness-crew](https://github.com/unitcraft/opencode-harness-crew) — letters and tasks between OpenCode sessions on one machine, across windows and projects, addressed by `project.role`
+- [crew-harness](https://github.com/unitcraft/crew-harness) — letters and tasks between OpenCode sessions on one machine, across windows and projects, addressed by `project.role`
 - [opencode-windows-env](https://github.com/unitcraft/opencode-windows-env) — a sane command environment on Windows and a time stamp on agent messages
 - [opencode-claude-guards](https://github.com/unitcraft/opencode-claude-guards) — the repository's Claude Code rules (hooks, permissions) in OpenCode windows
 

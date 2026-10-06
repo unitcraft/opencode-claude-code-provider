@@ -21,7 +21,7 @@
 //   * skills switched off are left out of the session (Claude Code takes an allowlist: the provider learns the
 //     full list once per directory from an interrupted turn, 0 tokens);
 //   * timeStamp: the provider stamps HH:MM before each answer text and tells the model not to write the time;
-//   * letters between OpenCode windows: OpenCode's tool list is dropped, so the opencode-harness-crew tools
+//   * letters between OpenCode windows: OpenCode's tool list is dropped, so the crew-harness tools
 //     (crew_list, crew_send, ...) come to Claude Code as the MCP server `crew`, acting for the
 //     requesting OpenCode session.
 // OpenCode loads the FIRST export whose name starts with "create", so this module exports

@@ -2,7 +2,7 @@
 //   1. DEFAULTS below (what an OpenCode window on Claude Code needs out of the box);
 //   2. the provider `settings` in opencode.jsonc (the whole machine);
 //   3. the window's project: `.opencode/opencode-claude-code-provider.json`, searched upward from the window's directory
-//      (like `.opencode/harness-crew.json` of opencode-harness-crew; the file is named after the package), so a
+//      (like `.opencode/crew-harness.json` of crew-harness; the file is named after the package), so a
 //      repository carries its own settings.
 // Object settings merge key by key (a project can switch one tool back on: `"tools": { "WebSearch": true }`),
 // anything else is replaced. autoCompactWindow: a number means every model ({"*": n}) and replaces the set.
@@ -20,7 +20,7 @@ export const DEFAULTS = Object.freeze({
   // (measured 2026-10-04: ~12k tokens of every turn's ~34k).
   tools: {
     Artifact: false, ArtifactComments: false, ArtifactData: false, DesignSync: false, // claude.ai artifacts
-    Workflow: false, ListAgents: false, SendMessage: false, // Claude Code agent teams (letters go through opencode-harness-crew)
+    Workflow: false, ListAgents: false, SendMessage: false, // Claude Code agent teams (letters go through crew-harness)
     CronCreate: false, CronDelete: false, CronList: false, ScheduleWakeup: false, RemoteTrigger: false, PushNotification: false, // scheduling, cloud
     ReportFindings: false, // code review
   },
