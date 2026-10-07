@@ -83,7 +83,7 @@ Nothing is spoofed: Claude Code runs under your own Claude login, exactly as in 
   gets the crew MCP server (`node <crew-harness>/mcp.ts`, tools `mcp__crew__crew_list`, ...,
   auto-allowed) acting for the requesting OpenCode session (`OPENCODE_CREW_SESSION`, same
   `XDG_DATA_HOME` mailbox). Its location: provider setting `crewMcp` (path to `mcp.ts`, `false`
-  turns it off), by default the sibling checkout `../crew-harness/mcp.ts`; `crewNode` overrides
+  turns it off), by default the sibling checkout `../crew-harness/opencode-plugin/mcp.ts` (or the former `../crew-harness/mcp.ts`); `crewNode` overrides
   the `node` command (node >= 24). The project list is not repeated here: the crew plugin shares
   its own. Incoming letters need nothing: the plugin puts them into the OpenCode session.
 - OpenCode loads the first export whose name starts with `create`; this module exports only
@@ -171,7 +171,7 @@ logged.
   "language": "ru",                                    // the provider's own lines: "en" (default) | "ru"
   "autoCompactWindow": { "opus": 500000 },             // per family (opus, sonnet, haiku, ...) or one number
   "tools": { "WebSearch": false },                     // false = removed from Claude Code's context
-  "crewMcp": "D:/Sources/opencode-plugins/crew-harness/mcp.ts" // default: the sibling checkout
+  "crewMcp": "D:/Sources/opencode-plugins/crew-harness/opencode-plugin/mcp.ts" // default: the sibling checkout
 }
 ```
 

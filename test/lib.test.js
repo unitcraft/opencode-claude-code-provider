@@ -55,6 +55,11 @@ test("crew MCP: explicit path, sibling checkout by default, off with false or wh
   writeFileSync(other, "")
   assert.equal(resolveCrewMcp(other, provider), other)
   assert.equal(resolveCrewMcp(path.join(base, "missing.ts"), provider), undefined)
+  // the plugin's folder (crew-harness plan 015): opencode-plugin/mcp.ts first, the former root path as a fallback
+  const folder = path.join(base, "crew-harness", "opencode-plugin", "mcp.ts")
+  mkdirSync(path.dirname(folder))
+  writeFileSync(folder, "")
+  assert.equal(resolveCrewMcp(undefined, provider), folder)
 })
 
 test("crew MCP server acts for the requesting OpenCode session, in the same mailbox", () => {

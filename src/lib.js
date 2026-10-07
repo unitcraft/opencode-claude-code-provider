@@ -92,12 +92,13 @@ export function saveSessionMap(map, file = sessionMapFile()) {
 /**
  * Letters between OpenCode windows (crew-harness) for Claude Code: its stdio MCP server, run for ONE
  * OpenCode session. `option`: path to crew-harness' mcp.ts, `false` to switch off, unset -> the sibling
- * checkout `../crew-harness/mcp.ts` next to this provider when it exists. Undefined -> no server.
+ * checkout next to this provider when it exists: `../crew-harness/opencode-plugin/mcp.ts` (the plugin's folder
+ * since 2026-10-07, plan 015 of crew-harness), else the former `../crew-harness/mcp.ts`. Undefined -> no server.
  */
 export function resolveCrewMcp(option, here = path.dirname(path.dirname(fileURLToPath(import.meta.url)))) { // here: the package root (src/..)
   if (option === false) return undefined
-  const file = typeof option === "string" && option ? path.resolve(option) : path.resolve(here, "..", "crew-harness", "mcp.ts")
-  return existsSync(file) ? file : undefined
+  if (typeof option === "string" && option) return existsSync(path.resolve(option)) ? path.resolve(option) : undefined
+  return [path.resolve(here, "..", "crew-harness", "opencode-plugin", "mcp.ts"), path.resolve(here, "..", "crew-harness", "mcp.ts")].find((f) => existsSync(f))
 }
 
 /** MCP server config (Claude Agent SDK `mcpServers` entry) acting for OpenCode session `session`. */
