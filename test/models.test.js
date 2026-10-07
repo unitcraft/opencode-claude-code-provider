@@ -85,7 +85,7 @@ test("the plugin: models into the catalog, the provider renamed, /cc-update-mode
       },
     },
   })
-  assert.equal(provider.name, "Claude Code · github.com/unitcraft")
+  assert.equal(provider.name, "Claude Code · github/unitcraft")
   assert.equal(models.get("claude-fable-5-1")?.name, "Claude Fable 5.1")
   assert.equal(models.get("claude-fable-5-1")?.limit?.context, 720000, "a new model takes its family's settings")
   assert.equal(models.get("opus")?.name, "Claude Opus (рекомендуемая → 5.5)")

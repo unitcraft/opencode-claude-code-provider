@@ -1,6 +1,6 @@
 // ПЛАГИН МОДЕЛЕЙ провайдера claude-code (2026-10-06). Кладёт в каталог OpenCode модели, которые предлагает сам Claude
 // Code: точные версии («Claude Opus 5.5») и псевдонимы с тем, на что они указывают («Claude Sonnet (рекомендуемая →
-// 5)»); имя провайдера — «Claude Code · github.com/unitcraft». Список — из кэша src/models.js; обновляется в фоне при
+// 5)»); имя провайдера — «Claude Code · github/unitcraft». Список — из кэша src/models.js; обновляется в фоне при
 // старте, если кэшу 24 часа, и командой /cc-update-models (без ограничения). Настройки новой модели (окно, картинки) —
 // как у её семейства в opencode.jsonc. Что получилось с каталогом — в журнал (opencode-plugins.log).
 import { appendFileSync } from "node:fs"

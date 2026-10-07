@@ -30,7 +30,7 @@ Nothing is spoofed: Claude Code runs under your own Claude login, exactly as in 
 - **Models in the picker (plugin `models/`).** The plugin puts into OpenCode's catalog the models Claude Code
   itself offers (`supportedModels`, a control request, no model call): exact versions (`Claude Opus 5.5`,
   `Claude Fable 5.1`) and the aliases with what they point at now (`Claude Sonnet (рекомендуемая → 5)`); the provider is
-  named `Claude Code · github.com/unitcraft`. The list is cached in `<OpenCode data>/claude-code-models.json` and
+  named `Claude Code · github/unitcraft`. The list is cached in `<OpenCode data>/claude-code-models.json` and
   refreshed in the background at start when it is 24 h old, or at once by `/cc-update-models`. A new model takes the
   settings (window, images) of its family in `opencode.jsonc` (Fable — of Opus). Register it next to the provider:
   `"plugins": [..., "<repo>/models"]`.

@@ -8,7 +8,7 @@ import path from "node:path"
 
 export const REFRESH_MS = 24 * 3_600_000
 export const PROVIDER_ID = "claude-code"
-export const PROVIDER_NAME = "Claude Code · github.com/unitcraft"
+export const PROVIDER_NAME = "Claude Code · github/unitcraft"
 const ALIASES = ["opus", "sonnet", "haiku"]
 
 export const dataDir = (env = process.env) => (env.XDG_DATA_HOME ? path.join(env.XDG_DATA_HOME, "opencode") : path.join(os.homedir(), ".local", "share", "opencode"))
