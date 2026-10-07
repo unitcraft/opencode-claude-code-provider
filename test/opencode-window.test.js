@@ -25,7 +25,7 @@ write(
                 "sonnet": { "limit": { "context": 720000, "output": 64000 } }, }, }, },
 }`,
 )
-// a project above its repositories (like D:/Sources/nv-lang): opus 520k
+// a project above its repositories (like C:/work/nova): opus 520k
 const nv = path.join(tmp, "nv")
 const tab = path.join(nv, "repo", "src")
 mkdirSync(tab, { recursive: true })

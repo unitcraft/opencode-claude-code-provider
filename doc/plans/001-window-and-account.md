@@ -2,7 +2,7 @@
 
 **Статус:** ЗАКРЫТ 2026-10-05.
 **Где остановились:** Ф.0–Ф.2 закрыты и работают у владельца; явные пороги из
-`D:/Sources/nv-lang/.opencode/opencode-claude-code-provider.json` убраны 2026-10-05 после перезапуска сервиса —
+`C:/work/nova/.opencode/opencode-claude-code-provider.json` убраны 2026-10-05 после перезапуска сервиса —
 единственный источник порога теперь конфиг OpenCode.
 **Проверено:** тесты (45), живая проверка в песочнице (Ф.1, Ф.2).
 
@@ -30,7 +30,7 @@
 
 - 2026-10-05: OpenCode собирает конфиг из `opencode.json(c)` и `.opencode/` **вверх от папки вкладки** (не только
   в корне репозитория): в песочнице `work/nova/.opencode/opencode.jsonc` над репозиторием `work/nova/repo` задал
-  `limit.context` модели — `model.list` вернул его. Для nv-lang это `D:/Sources/nv-lang/.opencode/opencode.jsonc`.
+  `limit.context` модели — `model.list` вернул его. Для nv-lang это `C:/work/nova/.opencode/opencode.jsonc`.
 
 - 2026-10-05: **OpenCode сжимает, когда контекст хода доходит до `limit.context − compaction.reserved`.** Песочница,
   Haiku, контекст ~28K, окно 40K: `reserved` 5000 (порог 35K) — сжатия нет; `reserved` 15000 (порог 25K) — сжатие
@@ -63,7 +63,7 @@
 `compaction.reserved` модели провайдера; порог Claude Code (`thresholdFor`): явный `autoCompactWindow` (опции
 провайдера, файл проекта) → окно OpenCode (`limit.context − compaction.reserved`) → умолчание провайдера. Настроено:
 глобальный `opencode.jsonc` — `reserved` 20000, окна 720K/720K/220K (порог 700K/700K/200K);
-`D:/Sources/nv-lang/.opencode/opencode.jsonc` — 520K/520K/220K (порог 500K/500K/200K).
+`C:/work/nova/.opencode/opencode.jsonc` — 520K/520K/220K (порог 500K/500K/200K).
 
 Проверено: тест `opencode-window` (JSONC с `//` в строке, порог из окна и `reserved`, проектный файл над
 репозиторием главнее глобального, модель без окна или без `reserved` — порога нет, порядок файлов, явные

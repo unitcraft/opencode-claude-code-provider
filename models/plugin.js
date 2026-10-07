@@ -2,14 +2,14 @@
 // Code: точные версии («Claude Opus 5.5») и псевдонимы с тем, на что они указывают («Claude Sonnet (рекомендуемая →
 // 5)»); имя провайдера — «Claude Code · github.com/unitcraft». Список — из кэша src/models.js; обновляется в фоне при
 // старте, если кэшу 24 часа, и командой /cc-update-models (без ограничения). Настройки новой модели (окно, картинки) —
-// как у её семейства в opencode.jsonc. Что получилось с каталогом — в журнал (nova-opencode-plugins.log).
+// как у её семейства в opencode.jsonc. Что получилось с каталогом — в журнал (opencode-plugins.log).
 import { appendFileSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { query } from "@anthropic-ai/claude-agent-sdk"
 import { PROVIDER_ID, PROVIDER_NAME, catalogEntries, fetchModels, modelsReport, readModels, stale, writeModels } from "../src/models.js"
 
-const LOG = path.join(os.tmpdir(), "nova-opencode-plugins.log")
+const LOG = path.join(os.tmpdir(), "opencode-plugins.log")
 const log = (line) => {
   try {
     appendFileSync(LOG, `${new Date().toISOString()} claude-code-models ${line}\n`)

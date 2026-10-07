@@ -92,8 +92,8 @@ Nothing is spoofed: Claude Code runs under your own Claude login, exactly as in 
 ## Install
 
 ```sh
-git clone https://github.com/unitcraft/opencode-claude-code-provider D:/Sources/opencode-claude-code-provider
-cd D:/Sources/opencode-claude-code-provider && npm install
+git clone https://github.com/unitcraft/opencode-claude-code-provider C:/work/opencode-claude-code-provider
+cd C:/work/opencode-claude-code-provider && npm install
 ```
 
 `~/.config/opencode/opencode.jsonc`:
@@ -101,9 +101,9 @@ cd D:/Sources/opencode-claude-code-provider && npm install
 ```jsonc
 "provider": {
   "claude-code": {
-    "npm": "file:///D:/Sources/opencode-claude-code-provider/index.js",
+    "npm": "file:///C:/work/opencode-claude-code-provider/index.js",
     "name": "Claude Code (official)",
-    "options": { "claudeConfigDir": "D:\\Sources\\.claude-accounts\\nv-lang" },
+    "options": { "claudeConfigDir": "C:\\Users\\me\\.claude-work" },
     "models": { "haiku": {}, "sonnet": {}, "opus": {} }
   }
 }
@@ -122,7 +122,7 @@ Three layers, each over the previous one (`src/settings.js`):
    window's directory.
 
 **Skills**: `skills: { "name": false }`, like `tools`. Claude Code puts the listing of every skill into
-each session (measured in nova-opencode: 51 skills, ~33k characters). The defaults leave out the
+each session (measured in a large project: 51 skills, ~33k characters). The defaults leave out the
 ones useless in an OpenCode window (Claude Code's own terminal UI, scheduling, claude.ai artifacts
 and documents); the repository's skills stay. Claude Code takes an allowlist, so the provider
 learns the full list once per directory from an interrupted turn (0 tokens) and passes "all but the
@@ -167,18 +167,18 @@ logged.
 ```jsonc
 // opencode.jsonc -> "providers" -> "claude-code" -> "settings"
 "settings": {
-  "claudeConfigDir": "D:/Sources/.claude-accounts/nv-lang",
+  "claudeConfigDir": "C:/Users/me/.claude-work",
   "language": "ru",                                    // the provider's own lines: "en" (default) | "ru"
   "autoCompactWindow": { "opus": 500000 },             // per family (opus, sonnet, haiku, ...) or one number
   "tools": { "WebSearch": false },                     // false = removed from Claude Code's context
-  "crewMcp": "D:/Sources/crew-harness/opencode-plugin/mcp.ts" // default: a sibling checkout next to this provider
+  "crewMcp": "C:/work/crew-harness/opencode-plugin/mcp.ts" // default: a sibling checkout next to this provider
 }
 ```
 
 ```jsonc
 // <repository>/.opencode/opencode-claude-code-provider.json -- this project only
 { "autoCompactWindow": { "haiku": 120000 }, "tools": { "Workflow": true },
-  "claudeConfigDir": "D:/Sources/.claude-accounts/4px" }  // this project's Claude account
+  "claudeConfigDir": "C:/Users/me/.claude-client" }  // this project's Claude account
 ```
 
 `autoCompactWindow` keys are the model names OpenCode sends (the keys of `models` in the provider
@@ -196,12 +196,12 @@ of a new version the provider reads OpenCode's program (`opencode.exe`, its bund
 result is kept in `<opencode data>/claude-code-provider-check.json`. The check also runs when the
 provider loads and every hour (so an `opencode upgrade` is noticed without any request). A failed
 check, repeated every hour until fixed: a Windows notification, a warning line in each window, a
-line in `%TEMP%/nova-opencode-plugins.log` -- all naming the ready prompt below.
+line in `%TEMP%/opencode-plugins.log` -- all naming the ready prompt below.
 The rules themselves stay safe: an unrecognized compaction or helper request is simply a normal
 turn again. By hand: `npm run check-opencode`.
 
 **Adapting to a new OpenCode**: give an agent the ready prompt `docs/adapt-to-opencode.md`
-(paste it into a window opened in `D:/Sources/opencode-plugins`). The steps it follows:
+(paste it into a window opened in `C:/work`). The steps it follows:
 
 1. `npm run check-opencode` -- which rule broke (`compaction: ...` or `title: ...`).
 2. See what OpenCode sends now, in a scratch data dir so open windows are untouched:
@@ -228,7 +228,7 @@ turn again. By hand: `npm run check-opencode`.
 - Every turn carries Claude Code's own part (measured 2026-10-04, Haiku): system prompt ~7k,
   built-in tools ~27k (~15k with the `tools` above), crew MCP ~0.2k,
   account settings ~0.8k, plus the repository's CLAUDE.md with its imports (nova: ~12k,
-  nova-opencode: ~8k). Written to the prompt cache once, then read from it each turn.
+  a large project: ~8k). Written to the prompt cache once, then read from it each turn.
 - OpenCode plugins that add to OpenCode's system prompt (opencode-windows-env's time hint) or act on
   OpenCode's tool calls (opencode-claude-guards) do not reach these windows; the repository's own
   `.claude` settings and hooks do.

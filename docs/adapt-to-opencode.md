@@ -1,11 +1,11 @@
 # Промпт: подстроить провайдер claude-code под новый OpenCode
 
 Вставь этот текст целиком в окно агента (Claude Code или OpenCode), открытое в
-`D:/Sources/opencode-plugins`. Агенту нужны: этот репозиторий, `npm`, `opencode`, `git`.
+`C:/work`. Агенту нужны: этот репозиторий, `npm`, `opencode`, `git`.
 
 ---
 
-Задача: провайдер `claude-code` (репозиторий `D:/Sources/opencode-plugins/opencode-claude-code-provider`)
+Задача: провайдер `claude-code` (репозиторий `C:/work/opencode-claude-code-provider`)
 сообщил, что установленная версия OpenCode больше не совпадает с его правилами. Восстанови совпадение.
 Отвечай владельцу по-русски, сообщения коммитов — по-английски.
 
@@ -19,7 +19,7 @@
    полным ходом Claude и повторит сообщение окна (письмо crew_send уйдёт дважды).
 
 Порядок работы:
-1. `cd D:/Sources/opencode-plugins/opencode-claude-code-provider && npm run check-opencode` — какие
+1. `cd C:/work/opencode-claude-code-provider && npm run check-opencode` — какие
    проверки упали (строки `FAIL`). Результат автопроверки: `<XDG_DATA_HOME>/opencode/claude-code-provider-check.json`.
 2. Работай в отдельной ветке и дереве: `git -C opencode-claude-code-provider worktree add ../opencode-claude-code-provider-adapt -b adapt main`
    и сделай в нём junction на `node_modules` основного клона. `main` живой — его не трогать до конца проверки.

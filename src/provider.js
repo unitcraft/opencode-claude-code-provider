@@ -49,7 +49,7 @@ const BASE_SETTINGS = {
   streamingInput: "always",
 }
 
-const LOG = path.join(os.tmpdir(), "nova-opencode-plugins.log")
+const LOG = path.join(os.tmpdir(), "opencode-plugins.log")
 const log = (line) => {
   try {
     appendFileSync(LOG, `${new Date().toISOString()} claude-code ${line}\n`)
