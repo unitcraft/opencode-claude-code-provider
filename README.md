@@ -171,7 +171,7 @@ logged.
   "language": "ru",                                    // the provider's own lines: "en" (default) | "ru"
   "autoCompactWindow": { "opus": 500000 },             // per family (opus, sonnet, haiku, ...) or one number
   "tools": { "WebSearch": false },                     // false = removed from Claude Code's context
-  "crewMcp": "D:/Sources/opencode-plugins/crew-harness/opencode-plugin/mcp.ts" // default: the sibling checkout
+  "crewMcp": "D:/Sources/crew-harness/opencode-plugin/mcp.ts" // default: a sibling checkout next to this provider
 }
 ```
 
