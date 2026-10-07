@@ -37,6 +37,7 @@ import { texts, compactionAnswer } from "./texts.js"
 import { DEFAULTS, explicitSettingsFor, settingsFor, toolSources, switchSources } from "./settings.js"
 import { opencodeWindow } from "./opencode-window.js"
 import { spawnClaudeCode } from "./spawn.js"
+import { executableFor } from "./models.js"
 import { isToolsCommand, discoverClaude, contextUsage, toolsReport } from "./tools-report.js"
 import { watchOpenCode, openCodeVersion, installedOpenCodeVersion, readCheckState, toast, CHECK_WARNING } from "./opencode-check.js"
 import { accountKey, resumeFor, sessionDirectory, loadSessionMap, saveSessionMap, resolveCrewMcp, crewMcpServer, isHelperRequest, helperSettings, isCompactionRequest, autoCompactWindowFor, disabledTools, enabledSkills, TIME_HINT, claudeEnv, backgroundHint, backgroundWatch, timeStamper, hhmm, rawUserTurn, newUserTurn, lastCallUsage, shortenToolInput, mainModelUsage, textResult, textStream, fileParts, filesInfo } from "./lib.js"
@@ -87,7 +88,12 @@ export function createClaudeCode(options = {}) {
   // else the server's own CLAUDE_CONFIG_DIR. Passed EXPLICITLY, so the account does not
   // depend on how the OpenCode background service happened to be started.
   const configDir = options.claudeConfigDir || process.env.CLAUDE_CONFIG_DIR
+  // Which Claude Code binary runs a window: the one installed on the machine (newer than the copy bundled with the SDK:
+  // its aliases, e.g. sonnet, point at the current models), unless claudeExecutable says a path or "bundled".
+  const claudeExe = executableFor(options.claudeExecutable)
+  log(`Claude Code binary: ${claudeExe ?? "the copy bundled with the SDK"}`)
   const userSettings = {
+    ...(claudeExe ? { pathToClaudeCodeExecutable: claudeExe } : {}),
     ...(configDir ? { env: { ...process.env, CLAUDE_CONFIG_DIR: configDir } } : {}),
     ...(options.defaultSettings ?? {}),
   }

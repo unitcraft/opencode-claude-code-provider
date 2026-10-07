@@ -7,7 +7,7 @@ import { appendFileSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { query } from "@anthropic-ai/claude-agent-sdk"
-import { PROVIDER_ID, PROVIDER_NAME, catalogEntries, fetchModels, modelsReport, readModels, stale, writeModels } from "../src/models.js"
+import { PROVIDER_ID, PROVIDER_NAME, catalogEntries, fetchModels, modelsReport, readModels, stale, systemClaude, writeModels } from "../src/models.js"
 
 const LOG = path.join(os.tmpdir(), "opencode-plugins.log")
 const log = (line) => {
@@ -21,7 +21,7 @@ let refreshing
 async function refresh() {
   refreshing ??= (async () => {
     try {
-      const models = await fetchModels(query, { cwd: os.tmpdir() })
+      const models = await fetchModels(query, { cwd: os.tmpdir(), ...(systemClaude() ? { pathToClaudeCodeExecutable: systemClaude() } : {}) })
       writeModels(models)
       log(`refreshed: ${models.map((m) => m.value).join(", ")}`)
       return { ok: true }
@@ -38,40 +38,61 @@ async function refresh() {
 export default {
   id: "claude-code-provider.models",
   async setup(ctx) {
+    // OpenCode 2.0.x: ctx.provider.transform и ctx.model.transform; прежний вид — один ctx.catalog.transform
     const catalog = ctx.catalog
-    if (!catalog?.transform) return log("no catalog API: models are not added")
-    const reg = await catalog.transform((ed) => {
+    if (!catalog?.transform && !(ctx.model?.transform && ctx.provider?.transform)) return log("no catalog API: models are not added")
+    const renameProvider = (update) => {
       try {
-        ed.provider.update(PROVIDER_ID, (p) => {
+        update(PROVIDER_ID, (p) => {
           p.name = PROVIDER_NAME
         })
       } catch (e) {
         log(`provider name: ${e}`)
       }
+    }
+    const fillModels = (get, update) => {
       const cache = readModels()
       if (!cache) return
       let added = 0
       for (const e of catalogEntries(cache.models)) {
-        const template = ed.model.get(PROVIDER_ID, e.template) ?? ed.model.get(PROVIDER_ID, "opus")
+        const template = get(PROVIDER_ID, e.template) ?? get(PROVIDER_ID, "opus")
         try {
-          ed.model.update(PROVIDER_ID, e.id, (m) => {
+          update(PROVIDER_ID, e.id, (m) => {
             if (template && m !== template && !m.limit) for (const [k, v] of Object.entries(structuredClone(template))) if (k !== "id" && k !== "name") m[k] = v
             m.name = e.name
+            if (e.released) m.time = { ...m.time, released: e.released }
           })
-          if (ed.model.get(PROVIDER_ID, e.id)) added++
+          if (get(PROVIDER_ID, e.id)) added++
         } catch (err) {
           log(`model ${e.id}: ${err}`)
         }
       }
       log(`catalog: ${added} of ${catalogEntries(cache.models).length} models (cache ${new Date(cache.at).toISOString()})`)
-    })
+    }
+    const regs = []
+    if (catalog?.transform) {
+      regs.push(
+        await catalog.transform((ed) => {
+          renameProvider((id, fn) => ed.provider.update(id, fn))
+          fillModels((p, m) => ed.model.get(p, m), (p, m, fn) => ed.model.update(p, m, fn))
+        }),
+      )
+    } else {
+      regs.push(await ctx.provider.transform((ed) => renameProvider((id, fn) => ed.update(id, fn))))
+      regs.push(await ctx.model.transform((ed) => fillModels((p, m) => ed.get(p, m), (p, m, fn) => ed.update(p, m, fn))))
+    }
+    const reload = async () => {
+      if (catalog?.reload) return catalog.reload()
+      await ctx.provider.reload?.()
+      await ctx.model.reload?.()
+    }
     const cmd = await ctx.command?.transform?.((ed) =>
       ed.add({
         name: "cc-update-models",
         description: "Обновить модели Claude Code в выборе модели (провайдер claude-code)",
         execute: async ({ sessionID }) => {
           const r = await refresh()
-          if (r.ok) await catalog.reload()
+          if (r.ok) await reload()
           const cache = readModels()
           const text = modelsReport(cache ? catalogEntries(cache.models) : [], cache?.at ?? Date.now(), r.ok ? undefined : r.error)
           try {
@@ -83,10 +104,10 @@ export default {
       }),
     )
     await ctx.command?.reload?.()
-    if (stale(readModels())) void refresh().then((r) => r.ok && catalog.reload())
+    if (stale(readModels())) void refresh().then((r) => r.ok && reload())
     log(`setup: models plugin on (cache ${readModels() ? "present" : "absent"})`)
     return async () => {
-      await reg?.dispose?.()
+      for (const reg of regs) await (typeof reg === "function" ? reg() : reg?.dispose?.())
       await cmd?.dispose?.()
     }
   },

@@ -22,6 +22,10 @@ Nothing is spoofed: Claude Code runs under your own Claude login, exactly as in 
   option, else the server's `CLAUDE_CONFIG_DIR`) is passed to Claude Code, so the account does not depend on how
   the OpenCode service was started, and one service serves projects with different accounts. A Claude Code
   session is resumed only under the account it started with; after a change of account the window starts anew.
+- **Which Claude Code runs the window.** By default the one installed on the machine (`claude.exe` found on `PATH`, e.g.
+  the npm global install): it is newer than the copy bundled with the SDK, so aliases such as `sonnet` point at the
+  current models, same as in the Claude app. Option `claudeExecutable`: a path to use another binary, or `"bundled"` for
+  the SDK's own copy. The choice is logged at start (`Claude Code binary: ...`).
 - **The tab is known to hooks.** `OPENCODE_SESSION_ID` (the OpenCode session id) is in Claude Code's environment,
   so the repository's hooks know which tab they serve -- e.g. a `Stop` hook reads that session's crew-harness
   status file ([plan 003](doc/plans/003-session-env.md)).
@@ -33,7 +37,8 @@ Nothing is spoofed: Claude Code runs under your own Claude login, exactly as in 
   named `Claude Code · github/unitcraft`. The list is cached in `<OpenCode data>/claude-code-models.json` and
   refreshed in the background at start when it is 24 h old, or at once by `/cc-update-models`. A new model takes the
   settings (window, images) of its family in `opencode.jsonc` (Fable — of Opus). Register it next to the provider:
-  `"plugins": [..., "<repo>/models"]`.
+  `"plugins": [..., "<repo>/models"]` (OpenCode loads a plugin folder only through its `index.ts`, which re-exports
+  `plugin.js`).
 - **Heavy runs only through the machine queue.** The project's `heavy_commands` (the plugin's setting: full gate,
   full build, test runs) are read from its committed settings file; a Bash call that launches one is denied before it
   runs (hook `PreToolUse`) with a hint to queue it: `crew_watch {command, machine: true}`. A mention (`grep gate.sh`)

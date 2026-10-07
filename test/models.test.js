@@ -59,35 +59,94 @@ test("the report names every model", () => {
   assert.match(modelsReport([], 0, "нет связи"), /не обновлено — нет связи/)
 })
 
-test("the plugin: models into the catalog, the provider renamed, /cc-update-models registered", async () => {
-  const data = mkdtempSync(path.join(os.tmpdir(), "occ-models-"))
-  process.env.XDG_DATA_HOME = data
-  const { modelsFile } = await import("../src/models.js")
-  writeModels(LIST, modelsFile(), Date.now()) // fresh: no refresh at setup
-  const models = new Map([["opus", { id: "opus", name: "Opus", limit: { context: 720000 }, capabilities: { attachment: true } }]])
-  const provider = { name: "Claude Code Provider" }
-  let transform, commands = []
-  const ctx = {
-    catalog: { transform: async (cb) => ((transform = cb), { dispose() {} }), reload: async () => {} },
-    command: { transform: async (cb) => (cb({ add: (d) => commands.push(d) }), { dispose() {} }), reload: async () => {} },
-    session: {},
-  }
-  const plugin = (await import("../models/plugin.js")).default
-  await plugin.setup(ctx)
-  transform({
-    provider: { update: (_id, fn) => fn(provider) },
-    model: {
+for (const style of ["ctx.provider/ctx.model (OpenCode 2.0)", "ctx.catalog (older)"]) {
+  test(`the plugin (${style}): models into the catalog, the provider renamed, /cc-update-models registered`, async () => {
+    const data = mkdtempSync(path.join(os.tmpdir(), "occ-models-"))
+    process.env.XDG_DATA_HOME = data
+    const { modelsFile } = await import("../src/models.js")
+    writeModels(LIST, modelsFile(), Date.now()) // fresh: no refresh at setup
+    const models = new Map([["opus", { id: "opus", name: "Opus", limit: { context: 720000 }, capabilities: { attachment: true } }]])
+    const provider = { name: "Claude Code Provider" }
+    const modelEd = {
       get: (_p, id) => models.get(id),
       update: (_p, id, fn) => {
         const m = models.get(id) ?? { id }
         fn(m)
         models.set(id, m)
       },
-    },
+    }
+    const providerEd = { update: (_id, fn) => fn(provider) }
+    let transforms = [], commands = []
+    const reg = async (cb) => (transforms.push(cb), { dispose() {} })
+    const ctx = {
+      command: { transform: async (cb) => (cb({ add: (d) => commands.push(d) }), { dispose() {} }), reload: async () => {} },
+      session: {},
+    }
+    if (style.startsWith("ctx.provider")) Object.assign(ctx, { provider: { transform: async (cb) => reg((_) => cb(providerEd)), reload: async () => {} }, model: { transform: async (cb) => reg((_) => cb(modelEd)), reload: async () => {} } })
+    else ctx.catalog = { transform: async (cb) => reg((_) => cb({ provider: providerEd, model: modelEd })), reload: async () => {} }
+    const plugin = (await import("../models/plugin.js")).default
+    await plugin.setup(ctx)
+    for (const t of transforms) t()
+    assert.equal(provider.name, "Claude Code · github/unitcraft")
+    assert.equal(models.get("claude-fable-5-1")?.name, "Claude Fable 5.1")
+    assert.equal(models.get("claude-fable-5-1")?.limit?.context, 720000, "a new model takes its family's settings")
+    assert.equal(models.get("opus")?.name, "Claude Opus (рекомендуемая → 5.5)")
+    assert.deepEqual(commands.map((c) => c.name), ["cc-update-models"])
   })
-  assert.equal(provider.name, "Claude Code · github/unitcraft")
-  assert.equal(models.get("claude-fable-5-1")?.name, "Claude Fable 5.1")
-  assert.equal(models.get("claude-fable-5-1")?.limit?.context, 720000, "a new model takes its family's settings")
-  assert.equal(models.get("opus")?.name, "Claude Opus (рекомендуемая → 5.5)")
-  assert.deepEqual(commands.map((c) => c.name), ["cc-update-models"])
+}
+
+test("plugin folder has an index.ts entry (OpenCode loads a folder plugin only through index.ts)", async () => {
+  const entry = await import("../models/index.ts")
+  const plugin = await import("../models/plugin.js")
+  assert.equal(entry.default, plugin.default)
+})
+
+test("order in the picker: newer on top, an alias right above its exact version", async () => {
+  const { catalogEntries: ce } = await import("../src/models.js")
+  const list = ce([
+    { value: "opus", resolvedModel: "claude-opus-5-5" },
+    { value: "claude-fable-5-1", resolvedModel: "claude-fable-5-1" },
+    { value: "sonnet", resolvedModel: "claude-sonnet-5-5" },
+    { value: "haiku", resolvedModel: "claude-haiku-4-5-20251001" },
+    { value: "claude-opus-4-6", resolvedModel: "claude-opus-4-6" },
+    { value: "claude-fable-5", resolvedModel: "claude-fable-5" },
+  ])
+  const order = [...list].sort((a, b) => b.released - a.released).map((e) => e.name)
+  assert.deepEqual(order, [
+    "Claude Opus (рекомендуемая → 5.5)",
+    "Claude Opus 5.5",
+    "Claude Sonnet (рекомендуемая → 5.5)",
+    "Claude Sonnet 5.5",
+    "Claude Fable 5.1",
+    "Claude Fable 5",
+    "Claude Opus 4.6",
+    "Claude Haiku (рекомендуемая → 4.5)",
+    "Claude Haiku 4.5",
+  ])
+})
+
+test("systemClaude finds claude.exe on PATH, or next to the npm shim", async () => {
+  const { systemClaude } = await import("../src/models.js")
+  const { mkdirSync, writeFileSync } = await import("node:fs")
+  const dir = mkdtempSync(path.join(os.tmpdir(), "occ-path-"))
+  assert.equal(systemClaude({ PATH: dir }), undefined)
+  const bin = path.join(dir, "node_modules", "@anthropic-ai", "claude-code", "bin")
+  mkdirSync(bin, { recursive: true })
+  writeFileSync(path.join(bin, "claude.exe"), "")
+  assert.equal(systemClaude({ PATH: dir }), path.join(bin, "claude.exe"))
+})
+
+test("executableFor: a path is taken as is, bundled/false means the SDK's copy, otherwise the installed one", async () => {
+  const { executableFor, systemClaude } = await import("../src/models.js")
+  const { mkdirSync, writeFileSync } = await import("node:fs")
+  const dir = mkdtempSync(path.join(os.tmpdir(), "occ-exe-"))
+  const bin = path.join(dir, "node_modules", "@anthropic-ai", "claude-code", "bin")
+  mkdirSync(bin, { recursive: true })
+  writeFileSync(path.join(bin, "claude.exe"), "")
+  const env = { PATH: dir }
+  assert.equal(executableFor(undefined, env), systemClaude(env))
+  assert.equal(executableFor("bundled", env), undefined)
+  assert.equal(executableFor(false, env), undefined)
+  assert.equal(executableFor("X:/my/claude.exe", env), "X:/my/claude.exe")
+  assert.equal(executableFor(undefined, { PATH: path.join(dir, "empty") }), undefined)
 })
