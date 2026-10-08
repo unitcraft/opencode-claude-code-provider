@@ -177,13 +177,14 @@ test("the plugin: an exact version takes the family's window from the config fil
   const { mkdirSync, writeFileSync } = await import("node:fs")
   const root = mkdtempSync(path.join(os.tmpdir(), "occ-plug-"))
   mkdirSync(path.join(root, "cfg", "opencode"), { recursive: true })
-  writeFileSync(path.join(root, "cfg", "opencode", "opencode.jsonc"), '{ "providers": { "claude-code": { "models": { "opus": { "limit": { "context": 720000, "output": 64000 } } } } } }')
+  writeFileSync(path.join(root, "cfg", "opencode", "opencode.jsonc"), '{ "providers": { "claude-code": { "models": { "opus": { "limit": { "context": 720000, "output": 64000 } }, "haiku": { "limit": { "context": 220000, "output": 32000 } } } } } }')
   process.env.XDG_CONFIG_HOME = path.join(root, "cfg")
   process.env.XDG_DATA_HOME = path.join(root, "data")
   const { modelsFile } = await import("../src/models.js")
   writeModels(LIST, modelsFile(), Date.now())
   // at this moment the config is not applied yet: every model, aliases included, has OpenCode's default limit
-  const models = new Map(["opus", "sonnet", "haiku", "claude-opus-5-5", "claude-sonnet-5", "claude-fable-5-1"].map((id) => [id, { id, limit: { context: 200000, output: 32000 } }]))
+  const models = new Map(["opus", "sonnet", "haiku", "claude-opus-5-5", "claude-sonnet-5", "claude-fable-5-1", "claude-haiku-4-5-20251001"].map((id) => [id, { id, limit: { context: 200000, output: 32000 } }]))
+  models.get("opus").limit = { context: 720000, output: 64000 } // the live catalog already shows the opus alias with the config window
   const ed = { get: (_p, id) => models.get(id), update: (_p, id, fn) => fn(models.get(id) ?? models.set(id, { id, limit: { context: 200000, output: 32000 } }).get(id)) }
   let transform
   const ctx = {
@@ -197,5 +198,6 @@ test("the plugin: an exact version takes the family's window from the config fil
   transform(ed)
   assert.equal(models.get("claude-sonnet-5").limit.context, 720000, "exact Sonnet takes the window of its family (the config here describes opus only: opus window)")
   assert.equal(models.get("claude-fable-5-1").limit.context, 720000)
+  assert.deepEqual(models.get("claude-haiku-4-5-20251001").limit, { context: 220000, output: 32000 }, "exact Haiku keeps its own family window, not the opus template one")
   delete process.env.XDG_CONFIG_HOME
 })

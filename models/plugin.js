@@ -65,10 +65,11 @@ export default {
         const template = [e.template, "opus"].map((id) => get(PROVIDER_ID, id)).find((x) => x && !isDefault(x))
         try {
           update(PROVIDER_ID, e.id, (m) => {
-            if (template && m !== template && isDefault(m)) for (const [k, v] of Object.entries(structuredClone(template))) if (k !== "id" && k !== "name") m[k] = v
+            const fresh = isDefault(m)
+            if (template && m !== template && fresh) for (const [k, v] of Object.entries(structuredClone(template))) if (k !== "id" && k !== "name") m[k] = v
             // the family's window from the config files: OpenCode applies the config's limit after this pass, so the catalog does not show it yet
             const own = fam[e.template] ?? fam.opus
-            if (own && isDefault(m)) m.limit = { ...m.limit, ...own }
+            if (own && fresh) m.limit = { ...m.limit, ...own }
             m.name = e.name
             if (e.released) m.time = { ...m.time, released: e.released }
           })
