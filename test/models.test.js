@@ -65,7 +65,11 @@ for (const style of ["ctx.provider/ctx.model (OpenCode 2.0)", "ctx.catalog (olde
     process.env.XDG_DATA_HOME = data
     const { modelsFile } = await import("../src/models.js")
     writeModels(LIST, modelsFile(), Date.now()) // fresh: no refresh at setup
-    const models = new Map([["opus", { id: "opus", name: "Opus", limit: { context: 720000 }, capabilities: { attachment: true } }]])
+    const models = new Map([
+      ["opus", { id: "opus", name: "Opus", limit: { context: 720000 }, capabilities: { attachment: true } }],
+      // OpenCode already carries these with a default limit of its own
+      ["claude-fable-5-1", { id: "claude-fable-5-1", limit: { context: 200000, output: 32000 } }],
+    ])
     const provider = { name: "Claude Code Provider" }
     const modelEd = {
       get: (_p, id) => models.get(id),
@@ -89,7 +93,7 @@ for (const style of ["ctx.provider/ctx.model (OpenCode 2.0)", "ctx.catalog (olde
     for (const t of transforms) t()
     assert.equal(provider.name, "Claude Code · github/unitcraft")
     assert.equal(models.get("claude-fable-5-1")?.name, "Claude Fable 5.1")
-    assert.equal(models.get("claude-fable-5-1")?.limit?.context, 720000, "a new model takes its family's settings")
+    assert.equal(models.get("claude-fable-5-1")?.limit?.context, 720000, "a model with OpenCode's default limit takes its family's settings")
     assert.equal(models.get("opus")?.name, "Claude Opus (рекомендуемая → 5.5)")
     assert.deepEqual(commands.map((c) => c.name), ["cc-update-models"])
   })

@@ -55,13 +55,15 @@ export default {
       if (!cache) return
       let added = 0
       for (const e of catalogEntries(cache.models)) {
-        const template = get(PROVIDER_ID, e.template) ?? get(PROVIDER_ID, "opus")
-        // a model that is new to the catalog takes its family's settings (window, images) in full: OpenCode gives it a default limit
-        // of its own (200000 / 32000), so "no limit yet" cannot be the test; a model the config already describes keeps its own
-        const isNew = !get(PROVIDER_ID, e.id)
+        // OpenCode already carries these models with a default limit of its own (200000 / 32000): a model whose limit is absent or is
+        // exactly that default is not described by the config, so it takes its family's settings (window, images) in full; a model the
+        // config (or a project file) describes with its own limit keeps it
+        const isDefault = (m) => !m.limit || (m.limit.context === 200000 && m.limit.output === 32000)
+        // the family's own entry from the config, else opus (a family the config does not describe, e.g. fable)
+        const template = [e.template, "opus"].map((id) => get(PROVIDER_ID, id)).find((x) => x && !isDefault(x))
         try {
           update(PROVIDER_ID, e.id, (m) => {
-            if (template && m !== template && isNew) for (const [k, v] of Object.entries(structuredClone(template))) if (k !== "id" && k !== "name") m[k] = v
+            if (template && m !== template && isDefault(m)) for (const [k, v] of Object.entries(structuredClone(template))) if (k !== "id" && k !== "name") m[k] = v
             m.name = e.name
             if (e.released) m.time = { ...m.time, released: e.released }
           })
