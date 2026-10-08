@@ -56,9 +56,12 @@ export default {
       let added = 0
       for (const e of catalogEntries(cache.models)) {
         const template = get(PROVIDER_ID, e.template) ?? get(PROVIDER_ID, "opus")
+        // a model that is new to the catalog takes its family's settings (window, images) in full: OpenCode gives it a default limit
+        // of its own (200000 / 32000), so "no limit yet" cannot be the test; a model the config already describes keeps its own
+        const isNew = !get(PROVIDER_ID, e.id)
         try {
           update(PROVIDER_ID, e.id, (m) => {
-            if (template && m !== template && !m.limit) for (const [k, v] of Object.entries(structuredClone(template))) if (k !== "id" && k !== "name") m[k] = v
+            if (template && m !== template && isNew) for (const [k, v] of Object.entries(structuredClone(template))) if (k !== "id" && k !== "name") m[k] = v
             m.name = e.name
             if (e.released) m.time = { ...m.time, released: e.released }
           })

@@ -70,7 +70,7 @@ for (const style of ["ctx.provider/ctx.model (OpenCode 2.0)", "ctx.catalog (olde
     const modelEd = {
       get: (_p, id) => models.get(id),
       update: (_p, id, fn) => {
-        const m = models.get(id) ?? { id }
+        const m = models.get(id) ?? { id, limit: { context: 200000, output: 32000 } } // OpenCode's own default for a new model
         fn(m)
         models.set(id, m)
       },
