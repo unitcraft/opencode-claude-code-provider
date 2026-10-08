@@ -7,6 +7,7 @@ import { appendFileSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { query } from "@anthropic-ai/claude-agent-sdk"
+import { familyLimits } from "../src/config-limits.js"
 import { PROVIDER_ID, PROVIDER_NAME, catalogEntries, fetchModels, modelsReport, readModels, stale, systemClaude, writeModels } from "../src/models.js"
 
 const LOG = path.join(os.tmpdir(), "opencode-plugins.log")
@@ -50,7 +51,8 @@ export default {
         log(`provider name: ${e}`)
       }
     }
-    const fillModels = (get, update) => {
+    const fillModels = (get, update, directory) => {
+      const fam = familyLimits(PROVIDER_ID, directory)
       const cache = readModels()
       if (!cache) return
       let added = 0
@@ -64,6 +66,9 @@ export default {
         try {
           update(PROVIDER_ID, e.id, (m) => {
             if (template && m !== template && isDefault(m)) for (const [k, v] of Object.entries(structuredClone(template))) if (k !== "id" && k !== "name") m[k] = v
+            // the family's window from the config files: OpenCode applies the config's limit after this pass, so the catalog does not show it yet
+            const own = fam[e.template] ?? fam.opus
+            if (own && isDefault(m)) m.limit = { ...m.limit, ...own }
             m.name = e.name
             if (e.released) m.time = { ...m.time, released: e.released }
           })
@@ -79,12 +84,12 @@ export default {
       regs.push(
         await catalog.transform((ed) => {
           renameProvider((id, fn) => ed.provider.update(id, fn))
-          fillModels((p, m) => ed.model.get(p, m), (p, m, fn) => ed.model.update(p, m, fn))
+          fillModels((p, m) => ed.model.get(p, m), (p, m, fn) => ed.model.update(p, m, fn), ctx.location?.directory)
         }),
       )
     } else {
       regs.push(await ctx.provider.transform((ed) => renameProvider((id, fn) => ed.update(id, fn))))
-      regs.push(await ctx.model.transform((ed) => fillModels((p, m) => ed.get(p, m), (p, m, fn) => ed.update(p, m, fn))))
+      regs.push(await ctx.model.transform((ed) => fillModels((p, m) => ed.get(p, m), (p, m, fn) => ed.update(p, m, fn), ctx.location?.directory)))
     }
     const reload = async () => {
       if (catalog?.reload) return catalog.reload()

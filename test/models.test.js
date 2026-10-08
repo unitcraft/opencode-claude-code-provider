@@ -154,3 +154,48 @@ test("executableFor: a path is taken as is, bundled/false means the SDK's copy, 
   assert.equal(executableFor("X:/my/claude.exe", env), "X:/my/claude.exe")
   assert.equal(executableFor(undefined, { PATH: path.join(dir, "empty") }), undefined)
 })
+
+test("familyLimits: windows of the families from the config chain, the nearest file wins; JSONC comments and trailing commas", async () => {
+  const { familyLimits, parseJsonc } = await import("../src/config-limits.js")
+  const { mkdirSync, writeFileSync } = await import("node:fs")
+  assert.deepEqual(parseJsonc('{ "a": "x // y", /* c */ "b": [1, 2,], // tail\n }'), { a: "x // y", b: [1, 2] })
+  const root = mkdtempSync(path.join(os.tmpdir(), "occ-cfg-"))
+  const cfg = path.join(root, "cfg")
+  const proj = path.join(root, "work", "proj", "sub")
+  mkdirSync(path.join(cfg, "opencode"), { recursive: true })
+  mkdirSync(path.join(root, "work", ".opencode"), { recursive: true })
+  mkdirSync(proj, { recursive: true })
+  writeFileSync(path.join(cfg, "opencode", "opencode.jsonc"), '{ // global\n "providers": { "claude-code": { "models": { "sonnet": { "limit": { "context": 720000, "output": 64000 } }, "haiku": { "limit": { "context": 220000, "output": 32000 } } } } } }')
+  writeFileSync(path.join(root, "work", ".opencode", "opencode.jsonc"), '{ "providers": { "claude-code": { "models": { "sonnet": { "limit": { "context": 520000 } } } } } }')
+  const env = { XDG_CONFIG_HOME: cfg }
+  assert.deepEqual(familyLimits("claude-code", proj, env), { sonnet: { context: 520000, output: 64000 }, haiku: { context: 220000, output: 32000 } })
+  assert.deepEqual(familyLimits("claude-code", path.join(root, "elsewhere"), env).sonnet, { context: 720000, output: 64000 })
+  assert.deepEqual(familyLimits("other", proj, env), {})
+})
+
+test("the plugin: an exact version takes the family's window from the config files when the catalog does not show it yet", async () => {
+  const { mkdirSync, writeFileSync } = await import("node:fs")
+  const root = mkdtempSync(path.join(os.tmpdir(), "occ-plug-"))
+  mkdirSync(path.join(root, "cfg", "opencode"), { recursive: true })
+  writeFileSync(path.join(root, "cfg", "opencode", "opencode.jsonc"), '{ "providers": { "claude-code": { "models": { "opus": { "limit": { "context": 720000, "output": 64000 } } } } } }')
+  process.env.XDG_CONFIG_HOME = path.join(root, "cfg")
+  process.env.XDG_DATA_HOME = path.join(root, "data")
+  const { modelsFile } = await import("../src/models.js")
+  writeModels(LIST, modelsFile(), Date.now())
+  // at this moment the config is not applied yet: every model, aliases included, has OpenCode's default limit
+  const models = new Map(["opus", "sonnet", "haiku", "claude-opus-5-5", "claude-sonnet-5", "claude-fable-5-1"].map((id) => [id, { id, limit: { context: 200000, output: 32000 } }]))
+  const ed = { get: (_p, id) => models.get(id), update: (_p, id, fn) => fn(models.get(id) ?? models.set(id, { id, limit: { context: 200000, output: 32000 } }).get(id)) }
+  let transform
+  const ctx = {
+    location: { directory: path.join(root, "work") },
+    provider: { transform: async () => ({ dispose() {} }), reload: async () => {} },
+    model: { transform: async (cb) => ((transform = cb), { dispose() {} }), reload: async () => {} },
+    command: { transform: async () => ({ dispose() {} }), reload: async () => {} },
+    session: {},
+  }
+  await (await import("../models/plugin.js")).default.setup(ctx)
+  transform(ed)
+  assert.equal(models.get("claude-sonnet-5").limit.context, 720000, "exact Sonnet takes the window of its family (the config here describes opus only: opus window)")
+  assert.equal(models.get("claude-fable-5-1").limit.context, 720000)
+  delete process.env.XDG_CONFIG_HOME
+})
